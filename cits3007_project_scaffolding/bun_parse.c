@@ -182,7 +182,61 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
     u32 checksum = read_u32_le(buf, 40);
     u32 flags = read_u32_le(buf, 44);
 
-    //Validate each field .... 
+    //Validate each field ....
+    // validate names are non-zero
+    if (name_length == 0) {
+      return BUN_MALFORMED;
+    }
+    // validate name offset is within printable ASCII range
+    if (!((0x20<name_offset<0x7E))) {
+      return BUN_MALFORMED;
+    }
+    // validate name fits in string table. Note: (cast to u64 to avoid overflow)
+    if ((u64)name_offset + (u64)name_length > header->string_table_size) {
+      return BUN_MALFORMED;
+    }
+    // validate data fits inside data section.
+    if (data_offset + data_size > header->data_section_size) {
+      return BUN_MALFORMED;
+    }
+
+    // validate compression value exists and is recognised
+    //If no compression, uncompressed size must be 0 (special value)
+    if (compression == BUN_COMPRESS_NONE) {
+      if (uncompressed_size != 0) {
+      return BUN_MALFORMED;
+    }
+    //if compression is RLE, uncompressed size must not be 0
+    else if (compression == BUN_COMPRESS_RLE) {
+      if (uncompressed_size == 0) {
+        return BUN_MALFORMED;
+      }
+      //check RLE data has even no. of bytes
+      if (data_size % 2 != 0) {
+        return BUN_MALFORMED;
+      }
+    }
+    //if compression is zlib
+    else if (compression >= BUN_COMPRESS_ZLIB) {
+      if (uncompressed_size == 0) {
+        return BUN_MALFORMED;
+      }
+      return BUN_UNSUPPORTED;
+    }
+    //if compression is unknown 
+    else {
+      return BUN_MALFORMED
+    }
+    
+    // validate check sum is non-zero
+    if (checksum != 0) {
+      return BUN_UNSUPPORTED;
+    }
+
+    // validate flags are known
+    if (flags != BUN_FLAG_ENCRYPTED && flags != BUN_FLAG_EXECUTABLE) {
+      return BUN_UNSUPPORTED;
+    }
     
   }
   return BUN_OK;

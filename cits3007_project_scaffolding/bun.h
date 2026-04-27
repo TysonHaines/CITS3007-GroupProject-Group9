@@ -38,6 +38,10 @@ typedef uint64_t u64;
 #define BUN_FLAG_ENCRYPTED  0x1u
 #define BUN_FLAG_EXECUTABLE 0x2u
 
+#define BUN_COMPRESS_NONE 0
+#define BUN_COMPRESS_RLE 1
+#define BUN_COMPRESS_ZLIB 2
+
 typedef struct {
     u32 magic;
     u16 version_major;
