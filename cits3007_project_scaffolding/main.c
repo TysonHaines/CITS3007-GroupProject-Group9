@@ -28,11 +28,27 @@ int main(int argc, char *argv[]) {
     return result;
   }
 
+
   result = bun_parse_assets(&ctx, &header);
 
   // TODO: on BUN_OK, print human-readable summary to stdout.
   //     on BUN_MALFORMED / BUN_UNSUPPORTED, print violation list to stderr.
   //     See project brief for output requirements.
+
+ 
+  //_____
+  // print final result summary
+  bun_print_header(&header);
+  if (result == BUN_OK) {
+    printf("\nParse complete: %u asset(s), no violations found.\n",
+      header.asset_count);
+  } else if (result == BUN_MALFORMED) {
+    fprintf(stderr, "\nParse failed: file is malformed (code %d)\n", result);
+  } else if (result == BUN_UNSUPPORTED) {
+    fprintf(stderr, "\nParse failed: file uses unsupported features (code %d)\n",
+      result);
+  }
+  //_____
 
   bun_close(&ctx);
   return result;
