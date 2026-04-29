@@ -3,6 +3,9 @@
 
 #include "asset_validators.h"
 
+#define NAME_VALIDATION_BUF_SIZE 1024
+
+
 void validate_name_length(BunParseContext *ctx, u32 idx, u32 name_length) {
   if (name_length == 0) {
     bun_add_violation(ctx, BUN_MALFORMED,
