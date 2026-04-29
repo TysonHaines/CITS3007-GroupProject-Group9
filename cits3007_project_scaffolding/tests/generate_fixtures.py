@@ -374,14 +374,14 @@ def generate_invalid_files(output_dir):
     with open(output_dir + '/invalid/18-checksum-nonzero.bun', 'wb') as f:
         f.write(build_single_asset(b"test", b"data", checksum=0xDEADBEEF))
     
-    # 19-flags-unknown.bun
+    # 19-flags-unknown.bun - bit 7 set, outside the known ENCRYPTED|EXECUTABLE bits
     with open(output_dir + '/invalid/19-flags-unknown.bun', 'wb') as f:
-        f.write(build_single_asset(b"test", b"data", flags=0x3))
+        f.write(build_single_asset(b"test", b"data", flags=0x80))
     
     print("Generated invalid fixtures in", output_dir + '/invalid')
 
 if __name__ == "__main__":
-    output_dir = "tests/fixtures"
+    output_dir = "fixtures"
     generate_valid_files(output_dir)
     generate_invalid_files(output_dir)
     print("All fixtures generated!")
