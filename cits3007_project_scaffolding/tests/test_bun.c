@@ -433,9 +433,9 @@ END_TEST
 START_TEST(test_file_not_found) {
     BunParseContext ctx = {0};
 
-    // File that doesn't exist should return BUN_ERR_IO
+    // File that doesn't exist should return BUN_ERR_NOT_FOUND
     bun_result_t r = bun_open("nonexistent/path/to/file.bun", &ctx);
-    ck_assert_int_eq(r, BUN_ERR_IO);
+    ck_assert_int_eq(r, BUN_ERR_NOT_FOUND);
 }
 END_TEST
 
