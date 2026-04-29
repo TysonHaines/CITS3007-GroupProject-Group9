@@ -5,6 +5,8 @@
 
 #include "asset_validators.h"
 
+#define NAME_VALIDATION_BUF_SIZE 1024
+
 /**
  * Validates that the name length is non-zero
  * Returns BUN_MALFORMED if the name length is zero, otherwise returns BUN_OK
@@ -22,7 +24,8 @@ void validate_name_length(u32 name_length) {
  * otherwise returns BUN_OK
  */
 void name_fits_string_table(u32 name_offset, u64 string_table_size, u32 name_length) {
-  if (name_offset > string_table_size || (u64)name_offset + (u64)name_length > string_table_size) {
+  if (name_offset > string_table_size ||
+    (u64)name_offset > string_table_size - (u64)name_length) {
     fprintf(stderr, "\nname is too large for string table\n");
     file_status = BUN_MALFORMED;
   }
@@ -34,7 +37,8 @@ void name_fits_string_table(u32 name_offset, u64 string_table_size, u32 name_len
  * otherwise returns BUN_OK
  */
 void data_fits_data_section(u64 data_offset, u64 data_size, const BunHeader *header) {
-  if (data_offset + data_size > header->data_section_size) {
+  if (data_size > header->data_section_size ||
+      data_offset > (header->data_section_size - data_size)) {
     fprintf(stderr, "\ndata is too large for data section\n");  
     file_status = BUN_MALFORMED;
   }
@@ -49,7 +53,7 @@ void data_fits_data_section(u64 data_offset, u64 data_size, const BunHeader *hea
  * compression type is unknown
  * otherwise returns BUN_OK
  */
-void validate_compression(u32 compression, u64 uncompressed_size, u64 data_size, u64 data_offset, BunParseContext *ctx, const BunHeader *header) {
+void validate_compression(BunParseContext *ctx, const BunHeader *header, u32 compression, u64 uncompressed_size, u64 data_size, u64 data_offset) {
   if (compression == BUN_COMPRESS_NONE) {
       if (uncompressed_size != 0) {
         fprintf(stderr, "\nuncompressed size must be 0 for no compression\n");
@@ -69,11 +73,13 @@ void validate_compression(u32 compression, u64 uncompressed_size, u64 data_size,
         file_status = BUN_MALFORMED;
       }
       // guard against overflow when computing actual offset
-      u64 actual_offset = header->data_section_offset + data_offset;
-      if (actual_offset > (u64)ctx->file_size || data_size > (u64)ctx->file_size - actual_offset) {
+      if (data_offset > (u64)ctx->file_size ||
+          header->data_section_offset > ((u64)ctx->file_size - data_offset) ||
+          data_size > (u64)ctx->file_size - header->data_section_offset - data_offset) {
         fprintf(stderr, "\ndata offset and size too large\n");
         file_status = BUN_MALFORMED;
       }
+      u64 actual_offset = header->data_section_offset + data_offset;
       long current_pos = ftell(ctx->file);
         if (fseek(ctx->file, (long)actual_offset, SEEK_SET) != 0) {
           fprintf(stderr, "\nfailed to jump to data offset\n");
@@ -111,12 +117,11 @@ void validate_compression(u32 compression, u64 uncompressed_size, u64 data_size,
       fprintf(stderr, "\ncompression type unknown\n");
       file_status = BUN_MALFORMED;
     }
-    file_status = BUN_OK;
 }
 
 /**
  * Validates checksum is non-zero
- * Returns BUN_UNSUPPORTED if checksum is zero
+ * Returns BUN_UNSUPPORTED if checksum is not zero
  * otherwise returns BUN_OK
  */
 void validate_non_zero_checksum(u32 checksum) {
@@ -124,7 +129,6 @@ void validate_non_zero_checksum(u32 checksum) {
     fprintf(stderr, "\nchecksum must be 0\n");
     file_status = BUN_UNSUPPORTED;
   }
-  file_status = BUN_OK;
 }
 
 /**
@@ -133,11 +137,11 @@ void validate_non_zero_checksum(u32 checksum) {
  * otherwise returns BUN_OK
  */
 void validate_flags(u32 flags) {
-  if (flags != BUN_FLAG_ENCRYPTED && flags != BUN_FLAG_EXECUTABLE) {
-  fprintf(stderr, "\nflags unknown\n");
+  u32 mask = BUN_FLAG_ENCRYPTED | BUN_FLAG_EXECUTABLE;
+  if ((flags & ~mask) != 0) {
+    fprintf(stderr, "\nflags unknown\n");
     file_status = BUN_UNSUPPORTED;
   }
-  file_status = BUN_OK;
 }
 
 /**
@@ -148,43 +152,31 @@ void validate_flags(u32 flags) {
  */
 void validate_asset_name(const BunHeader *header, BunParseContext *ctx, u32 name_offset, u32 name_length, char *asset_name) {
   // find address of asset name in string table
-    u64 pos = (u64)header->string_table_offset + (u64)name_offset;
+  u64 pos = (u64)header->string_table_offset + (u64)name_offset;
 
-    // allocate memory for name buffer
-    u8 *name_buf = malloc(name_length);
+  // allocate fixed length buffer
+  u8 name_buf[NAME_VALIDATION_BUF_SIZE];
+  u32 remaining = name_length;
 
-    // if memory allocation fails, return error
-    if (!name_buf) { 
-      fprintf(stderr, "\nfailed to allocate memory for 'name_buf'\n");
-      file_status = BUN_ERR_NOMEM;
+  fseek(ctx->file, (long)pos, SEEK_SET);
+
+  // check characters are valid in fixed length chunks
+  while (remaining > 0) {
+    u32 to_read = (remaining < NAME_VALIDATION_BUF_SIZE) ? remaining : NAME_VALIDATION_BUF_SIZE;
+    size_t bytes_read = fread(name_buf, 1, to_read, ctx->file);
+
+    if (bytes_read != to_read) {
+      fprintf(stderr, "\nError: failed to read asset name bytes\n");
+      file_status = BUN_ERR_IO;
+      return;
     }
 
-    // seek to position of name in string table and read name into buffer
-    fseek(ctx->file, (long)pos, SEEK_SET);
-
-    // failed to read name bytes
-    //_____
-    u32 read_len = name_length < 60 ? name_length : 60;
-    //_____
-    if (fread(name_buf, 1, read_len, ctx->file) != read_len) {
-      free(name_buf);
-      asset_name[read_len] = '\0';
-      fprintf(stderr, "\nfailed to read name bytes\n");
-      file_status = BUN_ERR_IO; 
-    }
-    //_____
-    for (size_t j = 0; j < name_length; j++) {
+    for (size_t j = 0; j < bytes_read; j++) {
       if (name_buf[j] < 0x20 || name_buf[j] > 0x7E) {
-        free(name_buf);
         fprintf(stderr, "\nname contains non-printable ASCII characters\n");
         file_status = BUN_MALFORMED;
       }
     }
-    free(name_buf);
-
-    if (fseek(ctx->file, (long)pos, SEEK_SET) != 0) {
-      fprintf(stderr, "\nfailed to find address of name in string table\n");
-      file_status = BUN_ERR_IO;
-    }
-    file_status = BUN_OK;
+    remaining -= (u32)bytes_read;
+  }
 }
