@@ -10,11 +10,14 @@ int main(int argc, char *argv[]) {
     return BUN_ERR_USAGE;
   }
 
+  // Get file path from command-line arguments
   const char *path = argv[1];
 
+  // Initialize parse context and header struct
   BunParseContext ctx = {0};
   BunHeader header  = {0};
 
+  // Open the file and populate ctx; handle errors.
   bun_result_t result = bun_open(path, &ctx);
   if (result != BUN_OK) {
       if (result == BUN_ERR_NOT_FOUND) {
