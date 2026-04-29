@@ -202,10 +202,11 @@ START_TEST(test_valid_multiple_assets) {
 
     r = bun_parse_header(&ctx, &header);
     ck_assert_int_eq(r, BUN_OK);
-
-    // Multiple assets test - may fail due to implementation
-    // Just verify header parsed correctly
     ck_assert_uint_eq(header.asset_count, 2);
+
+    // Full parsing test - should read all asset records
+    r = bun_parse_assets(&ctx, &header);
+    ck_assert_int_eq(r, BUN_OK);
 
     bun_close(&ctx);
 }
@@ -254,9 +255,11 @@ START_TEST(test_valid_two_simple) {
 
     r = bun_parse_header(&ctx, &header);
     ck_assert_int_eq(r, BUN_OK);
-
-    // Skip asset parsing due to known issues
     ck_assert_uint_eq(header.asset_count, 2);
+
+    // Parse all asset records
+    r = bun_parse_assets(&ctx, &header);
+    ck_assert_int_eq(r, BUN_OK);
 
     bun_close(&ctx);
 }
@@ -332,7 +335,7 @@ END_TEST
 
 // Compression tests
 
-// RLE returns BUN_OK (current parser doesn't validate properly)
+// RLE compression should succeed
 START_TEST(test_compression_rle) {
     BunParseContext ctx = {0};
     BunHeader header    = {0};
@@ -344,7 +347,6 @@ START_TEST(test_compression_rle) {
     ck_assert_int_eq(r, BUN_OK);
 
     r = bun_parse_assets(&ctx, &header);
-    // Current parser returns OK (should be UNSUPPORTED)
     ck_assert_int_eq(r, BUN_OK);
 
     bun_close(&ctx);
@@ -381,8 +383,8 @@ START_TEST(test_compression_unknown) {
     ck_assert_int_eq(r, BUN_OK);
 
     r = bun_parse_assets(&ctx, &header);
-    // Unknown compression returns BUN_MALFORMED
-    ck_assert_int_eq(r, BUN_MALFORMED);
+    // Unknown compression is unsupported
+    ck_assert_int_eq(r, BUN_UNSUPPORTED);
 
     bun_close(&ctx);
 }
@@ -428,6 +430,15 @@ END_TEST
 
 // Edge case tests
 
+START_TEST(test_file_not_found) {
+    BunParseContext ctx = {0};
+
+    // File that doesn't exist should return BUN_ERR_IO
+    bun_result_t r = bun_open("nonexistent/path/to/file.bun", &ctx);
+    ck_assert_int_eq(r, BUN_ERR_IO);
+}
+END_TEST
+
 START_TEST(test_flags_unknown) {
     BunParseContext ctx = {0};
     BunHeader header    = {0};
@@ -438,10 +449,9 @@ START_TEST(test_flags_unknown) {
     r = bun_parse_header(&ctx, &header);
     ck_assert_int_eq(r, BUN_OK);
 
-    // Note: current implementation doesn't validate flags
-    // so this passes; if flags validation is enabled, would return UNSUPPORTED
+    // Unknown flags must return BUN_UNSUPPORTED
     r = bun_parse_assets(&ctx, &header);
-    ck_assert_int_eq(r, BUN_OK);
+    ck_assert_int_eq(r, BUN_UNSUPPORTED);
 
     bun_close(&ctx);
 }
@@ -507,6 +517,7 @@ static Suite *bun_suite(void) {
 
     // Edge case tests
     TCase *tc_edge = tcase_create("edge-case-tests");
+    tcase_add_test(tc_edge, test_file_not_found);
     tcase_add_test(tc_edge, test_flags_unknown);
     tcase_add_test(tc_edge, test_checksum_nonzero);
     suite_add_tcase(s, tc_edge);
