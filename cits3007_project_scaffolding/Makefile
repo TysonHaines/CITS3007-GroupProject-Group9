@@ -10,7 +10,7 @@ LDFLAGS =
 #
 # CFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer -g
 
-LIB     = bun_parse.c validators/asset_validators.c validators/header_validators.c
+LIB     = bun_parse.c bun_print.c validators/asset_validators.c validators/header_validators.c
 MAIN    = main.c
 TEST    = tests/test_bun.c
 

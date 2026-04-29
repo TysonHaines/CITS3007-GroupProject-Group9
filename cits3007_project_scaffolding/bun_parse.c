@@ -198,21 +198,3 @@ bun_result_t bun_close(BunParseContext *ctx) {
   // Return appropriate result code based on fclose outcome
   return res ? BUN_ERR_IO : BUN_OK;
 }
-
-
-//_________________________________________________________________________________
-//!!! AI (Claude 3.5 Sonnet) generated the following function, to print the header in a readable format !!!
-void bun_print_header(const BunHeader *header) {
-  printf("===== BUN Header =====\n");
-  printf("  Magic:               0x%08X\n", header->magic);
-  printf("  Version:             %u.%u\n", header->version_major, header->version_minor);
-  printf("  Asset count:         %u\n", header->asset_count);
-  printf("  Asset table offset:  %llu\n", (unsigned long long)header->asset_table_offset);
-  printf("  String table offset: %llu\n", (unsigned long long)header->string_table_offset);
-  printf("  String table size:   %llu\n", (unsigned long long)header->string_table_size);
-  printf("  Data section offset: %llu\n", (unsigned long long)header->data_section_offset);
-  printf("  Data section size:   %llu\n", (unsigned long long)header->data_section_size);
-  printf("  Reserved:            %llu\n", (unsigned long long)header->reserved);
-  printf("\n");
-}
-//_________________________________________________________________________________

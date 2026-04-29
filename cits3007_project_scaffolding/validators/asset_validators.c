@@ -136,8 +136,9 @@ bun_result_t validate_non_zero_checksum(u32 checksum) {
  * otherwise returns BUN_OK
  */
 bun_result_t validate_flags(u32 flags) {
-  if (flags != BUN_FLAG_ENCRYPTED && flags != BUN_FLAG_EXECUTABLE) {
-  fprintf(stderr, "\nflags unknown\n");
+  u32 known_flags = BUN_FLAG_ENCRYPTED | BUN_FLAG_EXECUTABLE;
+  if (flags & ~known_flags) {
+    fprintf(stderr, "\nflags contain unknown bits\n");
     return BUN_UNSUPPORTED;
   }
   return BUN_OK;

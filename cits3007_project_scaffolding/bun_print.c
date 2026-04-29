@@ -1,0 +1,206 @@
+#include <stdio.h>
+#include <inttypes.h>
+
+#include "bun.h"
+
+//
+// Local little-endian read helpers. Duplicated from bun_parse.c so this
+// file remains self-contained; both copies are static (file-private) and
+// have no shared state, so duplication is safe.
+//
+
+static u32 read_u32_le(const u8 *buf, size_t offset) {
+  return (u32)buf[offset]
+     | (u32)buf[offset + 1] << 8
+     | (u32)buf[offset + 2] << 16
+     | (u32)buf[offset + 3] << 24;
+}
+
+static u64 read_u64_le(const u8 *buf, size_t offset) {
+  return (u64)buf[offset]
+     | (u64)buf[offset + 1] << 8
+     | (u64)buf[offset + 2] << 16
+     | (u64)buf[offset + 3] << 24
+     | (u64)buf[offset + 4] << 32
+     | (u64)buf[offset + 5] << 40
+     | (u64)buf[offset + 6] << 48
+     | (u64)buf[offset + 7] << 56;
+}
+
+//
+// Header printing
+//
+
+void bun_print_header(const BunHeader *header) {
+  printf("===== BUN Header =====\n");
+
+  // Magic: show both numeric and ASCII form (spec defines it as "BUN0").
+  printf("  Magic:               0x%08" PRIX32 "  (\"%c%c%c%c\")\n",
+         header->magic,
+         (char)(header->magic        & 0xFF),
+         (char)((header->magic >>  8) & 0xFF),
+         (char)((header->magic >> 16) & 0xFF),
+         (char)((header->magic >> 24) & 0xFF));
+
+  printf("  Version:             %" PRIu16 ".%" PRIu16 "\n",
+         header->version_major, header->version_minor);
+
+  printf("  Asset count:         %" PRIu32 "\n", header->asset_count);
+
+  // Show derived asset-table size so the reader can verify offsets.
+  printf("  Asset table offset:  %" PRIu64 " (0x%" PRIX64 ")"
+         " — table size: %" PRIu64 " bytes\n",
+         header->asset_table_offset, header->asset_table_offset,
+         (u64)header->asset_count * BUN_ASSET_RECORD_SIZE);
+
+  printf("  String table offset: %" PRIu64 " (0x%" PRIX64 ")\n",
+         header->string_table_offset, header->string_table_offset);
+  printf("  String table size:   %" PRIu64 " bytes\n",
+         header->string_table_size);
+
+  printf("  Data section offset: %" PRIu64 " (0x%" PRIX64 ")\n",
+         header->data_section_offset, header->data_section_offset);
+  printf("  Data section size:   %" PRIu64 " bytes\n",
+         header->data_section_size);
+
+  printf("  Reserved:            %" PRIu64 "\n", header->reserved);
+  printf("\n");
+}
+
+//
+// Asset record printing
+//
+
+// Print first up-to-60 chars of an asset name to stdout.
+// Reads from string table at name_offset.
+static void print_name_preview(FILE *f, u64 string_table_offset,
+                                u32 name_offset, u32 name_length) {
+  u32 preview_len = name_length < 60 ? name_length : 60;
+  if (preview_len == 0) {
+    printf("    Name:                (empty)\n");
+    return;
+  }
+
+  u8 buf[60];
+  u64 pos = string_table_offset + (u64)name_offset;
+  if (fseek(f, (long)pos, SEEK_SET) != 0 ||
+      fread(buf, 1, preview_len, f) != preview_len) {
+    printf("    Name:                (read failed)\n");
+    return;
+  }
+
+  printf("    Name:                \"");
+  for (u32 i = 0; i < preview_len; i++) {
+    // Replace anything non-printable with '?' so we stay on one line.
+    putchar((buf[i] >= 0x20 && buf[i] <= 0x7E) ? buf[i] : '?');
+  }
+  printf("\"%s\n", name_length > 60 ? " ..." : "");
+}
+
+// Print first up-to-60 bytes of an asset's payload to stdout. ASCII snippet if
+// printable, hex dump otherwise. Reads from f at actual_offset.
+static void print_payload_preview(FILE *f, u64 actual_offset, u64 data_size) {
+  // Cap preview at 60 bytes per brief 5.2.b.
+  u64 preview_len = data_size < 60 ? data_size : 60;
+  if (preview_len == 0) {
+    printf("    Data preview:        (empty)\n");
+    return;
+  }
+
+  u8 buf[60];
+  if (fseek(f, (long)actual_offset, SEEK_SET) != 0 ||
+      fread(buf, 1, (size_t)preview_len, f) != preview_len) {
+    printf("    Data preview:        (read failed)\n");
+    return;
+  }
+
+  // Detect whether the preview is printable ASCII (incl. tab/newline).
+  int printable = 1;
+  for (u64 i = 0; i < preview_len; i++) {
+    if (!((buf[i] >= 0x20 && buf[i] <= 0x7E) || buf[i] == '\t' || buf[i] == '\n')) {
+      printable = 0;
+      break;
+    }
+  }
+
+  if (printable) {
+    printf("    Data preview (ascii): \"");
+    for (u64 i = 0; i < preview_len; i++) {
+      // Escape newlines/tabs so the line stays on one line.
+      if (buf[i] == '\n')      printf("\\n");
+      else if (buf[i] == '\t') printf("\\t");
+      else                     putchar(buf[i]);
+    }
+    printf("\"%s\n", data_size > 60 ? " ..." : "");
+  } else {
+    printf("    Data preview (hex):  ");
+    for (u64 i = 0; i < preview_len; i++) {
+      printf("%02x ", buf[i]);
+    }
+    printf("%s\n", data_size > 60 ? "..." : "");
+  }
+}
+
+void bun_print_assets(BunParseContext *ctx, const BunHeader *header) {
+  // Save position so we don't disturb any caller that relied on it.
+  long saved = ftell(ctx->file);
+
+  // Seek to the start of the asset table.
+  if (fseek(ctx->file, (long)header->asset_table_offset, SEEK_SET) != 0) {
+    printf("(could not read asset table)\n");
+    return;
+  }
+
+  printf("===== Asset Records =====\n");
+  for (u32 i = 0; i < header->asset_count; i++) {
+    u8 buf[BUN_ASSET_RECORD_SIZE];
+    if (fread(buf, 1, BUN_ASSET_RECORD_SIZE, ctx->file) != BUN_ASSET_RECORD_SIZE) {
+      printf("  Asset #%u:           (read failed)\n", i);
+      break;
+    }
+
+    u32 name_offset       = read_u32_le(buf, 0);
+    u32 name_length       = read_u32_le(buf, 4);
+    u64 data_offset       = read_u64_le(buf, 8);
+    u64 data_size         = read_u64_le(buf, 16);
+    u64 uncompressed_size = read_u64_le(buf, 24);
+    u32 compression       = read_u32_le(buf, 32);
+    u32 type              = read_u32_le(buf, 36);
+    u32 checksum          = read_u32_le(buf, 40);
+    u32 flags             = read_u32_le(buf, 44);
+
+    printf("\n  Asset #%u\n", i);
+    printf("    Name offset:         %u\n", name_offset);
+    printf("    Name length:         %u\n", name_length);
+    printf("    Data offset:         %llu\n", (unsigned long long)data_offset);
+    printf("    Data size:           %llu\n", (unsigned long long)data_size);
+    printf("    Uncompressed size:   %llu\n", (unsigned long long)uncompressed_size);
+    printf("    Compression:         %u (%s)\n", compression,
+           compression == 0 ? "none" :
+           compression == 1 ? "RLE"  :
+           compression == 2 ? "zlib" : "unknown");
+    printf("    Type:                %u\n", type);
+    printf("    Checksum:            0x%08X\n", checksum);
+    printf("    Flags:               0x%X\n", flags);
+
+    // Save the asset table position before previewing (which moves the cursor).
+    long after_record = ftell(ctx->file);
+
+    print_name_preview(ctx->file, header->string_table_offset,
+                       name_offset, name_length);
+
+    u64 actual_offset = header->data_section_offset + data_offset;
+    print_payload_preview(ctx->file, actual_offset, data_size);
+
+    // Return to the asset table for the next iteration.
+    if (after_record < 0 ||
+        fseek(ctx->file, after_record, SEEK_SET) != 0) {
+      printf("    (lost file position; aborting record dump)\n");
+      break;
+    }
+  }
+  printf("\n");
+
+  // Restore caller's file position best-effort.
+  if (saved >= 0) fseek(ctx->file, saved, SEEK_SET);
+}
