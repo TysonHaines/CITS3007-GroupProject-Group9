@@ -8,6 +8,8 @@
 #include "validators/header_validators.h"
 #include <errno.h>
 
+bun_result_t file_status = BUN_OK;
+
 /**
  * Example helper: convert 4 bytes in `buf`, positioned at `offset`,
  * into a little-endian u32.
@@ -187,16 +189,18 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
 }
 
 bun_result_t bun_close(BunParseContext *ctx) {
+  // Caller must hold an open file
   assert(ctx->file);
 
+  // Close the stream and clear the file pointer
   int res = fclose(ctx->file);
-  if (res) {
-    return BUN_ERR_IO;
-  } else {
-    ctx->file = NULL;
-    return BUN_OK;
-  }
+  ctx->file = NULL;
+
+  // Return appropriate result code based on fclose outcome
+  return res ? BUN_ERR_IO : BUN_OK;
 }
+
+
 //_________________________________________________________________________________
 //!!! AI (Claude 3.5 Sonnet) generated the following function, to print the header in a readable format !!!
 void bun_print_header(const BunHeader *header) {

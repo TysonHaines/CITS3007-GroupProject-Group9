@@ -1,5 +1,5 @@
 CC      = gcc
-CFLAGS  = -std=c11 -Wall -Wextra -Wpedantic -Ivalidators
+CFLAGS  = -std=c11 -Wall -Wextra -Wpedantic -I. -Ivalidators
 
 # Flags passed to the linker. You will likely need to define this if you use
 # additional libraries.
