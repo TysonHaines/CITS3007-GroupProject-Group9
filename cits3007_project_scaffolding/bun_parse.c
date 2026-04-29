@@ -5,6 +5,7 @@
 
 #include "bun.h"
 #include "bun_validators.h"
+#include <errno.h>
 
 /**
  * Example helper: convert 4 bytes in `buf`, positioned at `offset`,
@@ -43,20 +44,28 @@ bun_result_t bun_open(const char *path, BunParseContext *ctx) {
   // we open the file; seek to the end, to get the size; then jump back to the
   // beginning, ready to start parsing.
 
+  // Open in binary mode; distinguish missing file from other I/O errors.
   ctx->file = fopen(path, "rb");
   if (!ctx->file) {
+    return errno == ENOENT ? BUN_ERR_NOT_FOUND : BUN_ERR_IO;
+  }
+
+  // Seek to end to measure size.
+  if (fseek(ctx->file, 0, SEEK_END) != 0) {
+    fclose(ctx->file);
+    ctx->file = NULL;
     return BUN_ERR_IO;
   }
 
-  if (fseek(ctx->file, 0, SEEK_END) != 0) {
-    fclose(ctx->file);
-    return BUN_ERR_IO;
-  }
+  // ftell after SEEK_END gives file size; negative means error.
   ctx->file_size = ftell(ctx->file);
   if (ctx->file_size < 0) {
     fclose(ctx->file);
+    ctx->file = NULL;
     return BUN_ERR_IO;
   }
+
+  // Rewind for header parse.
   rewind(ctx->file);
 
   return BUN_OK;
