@@ -201,24 +201,84 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
 
     //Validate Fields for each asset record
     // validate names are non-zero
-    if (name_length == 0) {
-      fprintf(stderr, "\nname length must be non-zero\n");
-      return BUN_MALFORMED;
-    }
+    validate_name_length(name_length);
+
     // validate name fits in string table. Note: (cast to u64 to avoid overflow)
-    if (name_offset > header->string_table_size || (u64)name_offset + (u64)name_length > header->string_table_size) {
-      fprintf(stderr, "\nname is too large for string table\n");
-      return BUN_MALFORMED;
-    }
+    name_fits_string_table(name_offset, header->string_table_size, name_length);
+
     // validate data fits inside data section.
-    if (data_offset + data_size > header->data_section_size) {
-      fprintf(stderr, "\ndata is too large for data section\n");  
-      return BUN_MALFORMED;
-    }
+    data_fits_data_section(data_offset, data_size, header->data_section_size);
 
     // validate compression value exists and is recognised
     //If no compression, uncompressed size must be 0 (special value)
-    if (compression == BUN_COMPRESS_NONE) {
+    validate_compression(compression, uncompressed_size, data_size, data_offset, ctx, header);
+    
+    // validate check sum is non-zero
+    validate_non_zero_checksum(checksum);
+
+    // validate flags are known
+    validate_flags(flags);
+
+    // validate asset names
+    validate_asset_name(header, ctx, name_offset, name_length, asset_name);
+  }
+  return BUN_OK;
+}
+
+bun_result_t bun_close(BunParseContext *ctx) {
+  assert(ctx->file);
+
+  int res = fclose(ctx->file);
+  if (res) {
+    return BUN_ERR_IO;
+  } else {
+    ctx->file = NULL;
+    return BUN_OK;
+  }
+}
+
+//______
+void bun_print_header(const BunHeader *header) {
+  printf("=== BUN Header ===\n");
+  printf("  Magic:               0x%08X\n", header->magic);
+  printf("  Version:             %u.%u\n", header->version_major, header->version_minor);
+  printf("  Asset count:         %u\n", header->asset_count);
+  printf("  Asset table offset:  %llu\n", (unsigned long long)header->asset_table_offset);
+  printf("  String table offset: %llu\n", (unsigned long long)header->string_table_offset);
+  printf("  String table size:   %llu\n", (unsigned long long)header->string_table_size);
+  printf("  Data section offset: %llu\n", (unsigned long long)header->data_section_offset);
+  printf("  Data section size:   %llu\n", (unsigned long long)header->data_section_size);
+  printf("  Reserved:            %llu\n", (unsigned long long)header->reserved);
+  printf("\n");
+}
+//______
+
+static bun_result_t validate_name_length(u32 name_length) {
+  if (name_length == 0) {
+    fprintf(stderr, "\nname length must be non-zero\n");
+    return BUN_MALFORMED;
+  }
+  return BUN_OK;
+}
+
+static bun_result_t name_fits_string_table(u32 name_offset, u64 string_table_size, u32 name_length) {
+  if (name_offset > string_table_size || (u64)name_offset + (u64)name_length > string_table_size) {
+    fprintf(stderr, "\nname is too large for string table\n");
+    return BUN_MALFORMED;
+  }
+  return BUN_OK;
+}
+
+static bun_result_t data_fits_data_section(u64 data_offset, u64 data_size, u64 data_section_size) {
+  if (data_offset + data_size > data_section_size) {
+    fprintf(stderr, "\ndata is too large for data section\n");  
+    return BUN_MALFORMED;
+  }
+  return BUN_OK;
+}
+
+static bun_result_t validate_compression(u32 compression, u64 uncompressed_size, u64 data_size, u64 data_offset, BunParseContext *ctx, const BunHeader *header) {
+  if (compression == BUN_COMPRESS_NONE) {
       if (uncompressed_size != 0) {
         fprintf(stderr, "\nuncompressed size must be 0 for no compression\n");
         return BUN_MALFORMED;
@@ -279,20 +339,27 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
       fprintf(stderr, "\ncompression type unknown\n");
       return BUN_MALFORMED;
     }
-    
-    // validate check sum is non-zero
-    if (checksum != 0) {
-      fprintf(stderr, "\nchecksum must be 0\n");
-      return BUN_UNSUPPORTED;
-    }
+    return BUN_OK;
+}
 
-    // // validate flags are known
-    // if (flags != BUN_FLAG_ENCRYPTED && flags != BUN_FLAG_EXECUTABLE) {
-    //   fprintf(stderr, "\nflags unknown\n");
-    //   return BUN_UNSUPPORTED;
-    // }
-    //__________
-    // find address of asset name in string table
+static bun_result_t validate_non_zero_checksum(u32 checksum) {
+  if (checksum != 0) {
+    fprintf(stderr, "\nchecksum must be 0\n");
+    return BUN_UNSUPPORTED;
+  }
+  return BUN_OK;
+}
+
+static bun_result_t validate_flags(u32 flags) {
+  if (flags != BUN_FLAG_ENCRYPTED && flags != BUN_FLAG_EXECUTABLE) {
+  fprintf(stderr, "\nflags unknown\n");
+    return BUN_UNSUPPORTED;
+  }
+  return BUN_OK;
+}
+
+static bun_result_t validate_asset_name(const BunHeader *header, BunParseContext *ctx, u32 name_offset, u32 name_length, char *asset_name) {
+  // find address of asset name in string table
     u64 pos = (u64)header->string_table_offset + (u64)name_offset;
     // allocate memory for name buffer
     u8 *name_buf = malloc(name_length);
@@ -329,37 +396,5 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
       fprintf(stderr, "\nfailed to find address of name in string table\n");
       return BUN_ERR_IO;
     }
-
-    //__________
-  }
-  return BUN_OK;
-}
-
-bun_result_t bun_close(BunParseContext *ctx) {
-  assert(ctx->file);
-
-  int res = fclose(ctx->file);
-  if (res) {
-    return BUN_ERR_IO;
-  } else {
-    ctx->file = NULL;
     return BUN_OK;
-  }
 }
-
-//______
-void bun_print_header(const BunHeader *header) {
-  printf("=== BUN Header ===\n");
-  printf("  Magic:               0x%08X\n", header->magic);
-  printf("  Version:             %u.%u\n", header->version_major, header->version_minor);
-  printf("  Asset count:         %u\n", header->asset_count);
-  printf("  Asset table offset:  %llu\n", (unsigned long long)header->asset_table_offset);
-  printf("  String table offset: %llu\n", (unsigned long long)header->string_table_offset);
-  printf("  String table size:   %llu\n", (unsigned long long)header->string_table_size);
-  printf("  Data section offset: %llu\n", (unsigned long long)header->data_section_offset);
-  printf("  Data section size:   %llu\n", (unsigned long long)header->data_section_size);
-  printf("  Reserved:            %llu\n", (unsigned long long)header->reserved);
-  printf("\n");
-}
-//______
-
