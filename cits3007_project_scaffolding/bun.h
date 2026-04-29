@@ -43,7 +43,7 @@ typedef uint64_t u64;
 #define BUN_COMPRESS_RLE 1
 #define BUN_COMPRESS_ZLIB 2
 
-static bun_result_t file_status = BUN_OK;
+extern bun_result_t file_status;
 
 typedef struct {
     u32 magic;
