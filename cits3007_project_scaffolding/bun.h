@@ -40,10 +40,8 @@ typedef uint64_t u64;
 #define BUN_FLAG_EXECUTABLE 0x2u
 
 #define BUN_COMPRESS_NONE 0
-#define BUN_COMPRESS_RLE 1
+#define BUN_COMPRESS_RLE  1
 #define BUN_COMPRESS_ZLIB 2
-
-extern bun_result_t file_status;
 
 typedef struct {
     u32 magic;
@@ -70,87 +68,62 @@ typedef struct {
     u32 flags;
 } BunAssetRecord;
 
-//
-// Expected on-disk sizes -- these can be used in assertions or static_asserts.
-//
-
 #define BUN_HEADER_SIZE       60
 #define BUN_ASSET_RECORD_SIZE 48
 
 //
+// Violation tracking
+//
+// Validators record format violations into a list on the parse context
+// rather than printing directly. main can then iterate the list and emit
+// one line per violation to stderr. severity is BUN_MALFORMED or
+// BUN_UNSUPPORTED -- the worst severity across the list determines the
+// final result code.
+//
+
+typedef struct BunViolation {
+    bun_result_t severity;     // BUN_MALFORMED or BUN_UNSUPPORTED
+    char *message;             // heap-allocated, owned by the violation
+    struct BunViolation *next;
+} BunViolation;
+
+//
 // Parse context
-//
-// A struct to store information about the state of your parser (rather than
-// passing multiple arguments to every function).
-//
-// You will likely want to add fields to it as your implementation grows.
 //
 
 typedef struct {
-    FILE   *file;           // open file handle
-    long    file_size;      // total file size in bytes
-    // add further fields here as needed
+    FILE   *file;
+    long    file_size;
+
+    // Violation list -- populated by validators, consumed by main.
+    BunViolation *violations_head;
+    BunViolation *violations_tail;
 } BunParseContext;
 
 //
 // Public API
 //
-// The function declarations below define the public API for your parser;
-// you implement them in the `bun_parse.c` file.
-//
-// A note on I/O and output:
-//   The functions below return result codes; the intention is that they
-//   should not print to stdout or stderr themselves.
-//   Keeping I/O out of these functions makes them much easier to test (your
-//   tests can call them and inspect the return value without terminal output
-//   getting cluttered with other content).
-//   If you need to pass additional information in or out, `ctx` is a good place
-//   to put it.
-//
-//   So printing (human-readable output for valid files and error messages
-//   for invalid ones) should happen in main.c, based on the result code and
-//   the content of `ctx`.
-//
-//   (This is a suggestion, not a requirement. But mixing output deeply into
-//   parsing logic tends to make both harder to maintain.)
 
-/**
- * Open a BUN file and populate ctx. Returns BUN_ERR_IO if the file cannot
- * be opened or its size determined.
- */
 bun_result_t bun_open(const char *path, BunParseContext *ctx);
-
-/**
- * Parse and validate the BUN header from ctx->file, populating *header.
- * Returns BUN_OK, BUN_MALFORMED, or BUN_UNSUPPORTED.
- */
 bun_result_t bun_parse_header(BunParseContext *ctx, BunHeader *header);
-
-/**
- * Parse and validate all asset records. Called after bun_parse_header().
- * Returns BUN_OK, BUN_MALFORMED, or BUN_UNSUPPORTED.
- *
- * You will probably want to extend this signature -- for instance, to pass
- * in the header (needed for offset calculations) or to return the parsed
- * records to the caller.
- */
 bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header);
-
-/**
- * Close the file handle in ctx. Must only be called on a BunParseContext
- * holding an open FILE*. Returns BUN_OK on success, BUN_ERR_IO on error.
- */
 bun_result_t bun_close(BunParseContext *ctx);
 
-//______
+//
+// Violation list helpers (defined in bun_violations.c)
+//
+
+bun_result_t bun_add_violation(BunParseContext *ctx, bun_result_t severity,
+                                const char *fmt, ...);
+bun_result_t bun_worst_violation(const BunParseContext *ctx);
+void bun_print_violations(const BunParseContext *ctx);
+void bun_free_violations(BunParseContext *ctx);
+
+//
+// Output helpers (defined in bun_print.c)
+//
+
 void bun_print_header(const BunHeader *header);
-void bun_validate_magic(const BunHeader *header);
-void bun_validate_offsets(const BunHeader *header);
-void bun_validate_version(const BunHeader *header);
-void bun_validate_asset_count(const BunHeader *header);
-void bun_validate_asset_table_size(const BunHeader *header, u64 file_size, u64 asset_table_size);
-void bun_validate_string_table_size(const BunHeader *header, u64 file_size);
-void bun_validate_data_section_size(const BunHeader *header, u64 file_size);
-void bun_validate_no_overlap(const BunHeader *header, u64 asset_table_size);
-//______
+void bun_print_assets(BunParseContext *ctx, const BunHeader *header);
+
 #endif // BUN_H
