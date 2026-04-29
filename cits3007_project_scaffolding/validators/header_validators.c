@@ -31,14 +31,6 @@ void validate_version(const BunHeader *header) {
   }
 }
 
-void validate_asset_count(const BunHeader *header) {
-  // Guard against overflow when computing asset table size
-  if (header->asset_count > UINT64_MAX / 48) {
-    fprintf(stderr, "\nAsset count is too large\n");
-    file_status = BUN_MALFORMED;
-  }
-}
-
 void validate_asset_table_size(const BunHeader *header, u64 file_size, u64 asset_table_size) {
   if (header->asset_table_offset > file_size ||
       asset_table_size > file_size - header->asset_table_offset) {

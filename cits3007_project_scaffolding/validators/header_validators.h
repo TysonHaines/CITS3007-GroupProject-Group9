@@ -7,8 +7,6 @@ void validate_offsets(const BunHeader *header);
 
 void validate_version(const BunHeader *header);
 
-void validate_asset_count(const BunHeader *header);
-
 void validate_asset_table_size(const BunHeader *header, u64 file_size, u64 asset_table_size);
 
 void validate_string_table_size(const BunHeader *header, u64 file_size);

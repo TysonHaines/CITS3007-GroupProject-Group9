@@ -114,9 +114,6 @@ bun_result_t bun_parse_header(BunParseContext *ctx, BunHeader *header) {
   // validate version is 1 or 0 otherwise unsupported
   validate_version(header);
 
-  // Guard against overflow when computing asset table size
-  validate_asset_count(header);
-
   // Validate all sections lie entirely within the file
   u64 asset_table_size = (u64)header->asset_count * 48;
   u64 file_size = (u64)ctx->file_size;
@@ -158,6 +155,8 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
     u64 uncompressed_size = read_u64_le(buf, 24);
     u32 compression = read_u32_le(buf, 32);
     u32 type = read_u32_le(buf, 36);
+    (void)type;  // displayed in human-readable output (TODO)
+
     u32 checksum = read_u32_le(buf, 40);
     u32 flags = read_u32_le(buf, 44);
 
