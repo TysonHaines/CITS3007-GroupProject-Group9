@@ -32,12 +32,18 @@ int main(int argc, char *argv[]) {
   // Show whatever the parser was able to read on stdout, per brief 5.2.e.
   bun_print_header(&header);
 
-  // Only attempt asset records if the header was good enough to trust offsets.
-  if (result == BUN_OK) {
+  u64 asset_table_size = (u64)header.asset_count * BUN_ASSET_RECORD_SIZE;
+  int asset_table_readable =
+    header.asset_table_offset < (u64)ctx.file_size &&
+    asset_table_size <= (u64)ctx.file_size - header.asset_table_offset;
+
+  if (asset_table_readable) {
     bun_result_t assets_result = bun_parse_assets(&ctx, &header);
     bun_print_assets(&ctx, &header);
-    if (assets_result != BUN_OK) {
-      result = assets_result;
+    if (assets_result != BUN_OK && result == BUN_OK) {
+        result = assets_result;
+    } else if (assets_result == BUN_MALFORMED && result == BUN_UNSUPPORTED) {
+        result = BUN_MALFORMED;
     }
   }
 
