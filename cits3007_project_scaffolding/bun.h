@@ -144,6 +144,7 @@ bun_result_t bun_close(BunParseContext *ctx);
 
 //______
 void bun_print_header(const BunHeader *header);
+void bun_print_assets(BunParseContext *ctx, const BunHeader *header);
 void bun_validate_magic(const BunHeader *header);
 void bun_validate_offsets(const BunHeader *header);
 void bun_validate_version(const BunHeader *header);

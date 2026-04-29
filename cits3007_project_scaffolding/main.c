@@ -45,20 +45,18 @@ int main(int argc, char *argv[]) {
   //     See project brief for output requirements.
 
  
-  //_____!!! AI (Claude 3.5 Sonnet) generated the following code for printing the final result summary !!!
-  // print final result summary
   bun_print_header(&header);
-  if (result == BUN_OK) {
-    printf("\nParse complete: %u asset(s), no violations found.\n",
-      header.asset_count);
-  } else if (result == BUN_MALFORMED) {
-    fprintf(stderr, "\nParse failed: file is malformed (code %d)\n", result);
-  } else if (result == BUN_UNSUPPORTED) {
-    fprintf(stderr, "\nParse failed: file uses unsupported features (code %d)\n",
-      result);
-  }
-  //_____
+  bun_print_assets(&ctx, &header);
 
+  if (result == BUN_OK) {
+      printf("Parse complete: %u asset(s), no violations found.\n",
+            header.asset_count);
+  } else if (result == BUN_MALFORMED) {
+      fprintf(stderr, "Parse failed: file is malformed (code %d)\n", result);
+  } else if (result == BUN_UNSUPPORTED) {
+      fprintf(stderr, "Parse failed: file uses unsupported features (code %d)\n", result);
+  }
+  
   bun_close(&ctx);
   return result;
 }
