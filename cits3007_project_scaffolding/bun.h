@@ -141,12 +141,5 @@ bun_result_t bun_close(BunParseContext *ctx);
 
 //______
 void bun_print_header(const BunHeader *header);
-
-bun_result_t non_zero_name(u32 name_length);
-bun_result_t name_fits_string_table(u32 name_offset, u32 name_length, const BunHeader *header);
-bun_result_t data_fits_data_section(u64 data_offset, u64 data_size, const BunHeader *header);
-bun_result_t valid_compression(u32 compression, u64 uncompressed_size);
-bun_result_t valid_RLE(u32 compression, u64 uncompressed_size, u64 data_size);
-
 //______
 #endif // BUN_H
