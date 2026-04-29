@@ -3,7 +3,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "bun_validators.h"
+#include "asset_validators.h"
 
 /**
  * Validates that the name length is non-zero
