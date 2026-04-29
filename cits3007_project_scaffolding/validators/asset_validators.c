@@ -140,29 +140,37 @@ void validate_asset_name(BunParseContext *ctx, u32 idx,
   u64 pos = (u64)header->string_table_offset + (u64)name_offset;
   if (fseek(ctx->file, (long)pos, SEEK_SET) != 0) return;
 
-  u8 *name_buf = malloc(name_length);
-  if (!name_buf) {
-    fseek(ctx->file, saved_pos, SEEK_SET);
-    return;
-  }
+  u8 name_buf[NAME_VALIDATION_BUF_SIZE];
+  u32 remaining = name_length;
+  u32 total_checked = 0;
 
-  // Read the FULL name length so validation covers every byte
-  // (fixes the original heap-buffer-overread bug).
-  if (fread(name_buf, 1, name_length, ctx->file) != name_length) {
-    free(name_buf);
-    fseek(ctx->file, saved_pos, SEEK_SET);
-    return;
-  }
+  while (remaining > 0) {
+    u32 to_read = (remaining < NAME_VALIDATION_BUF_SIZE) ? remaining : NAME_VALIDATION_BUF_SIZE;
+    size_t bytes_read = fread(name_buf, 1, to_read, ctx->file);
 
-  for (u32 j = 0; j < name_length; j++) {
-    if (name_buf[j] < 0x20 || name_buf[j] > 0x7E) {
+    if (bytes_read != to_read) {
       bun_add_violation(ctx, BUN_MALFORMED,
-          "asset[%u]: name contains non-printable byte 0x%02X at index %u",
-          idx, name_buf[j], j);
+          "asset[%u]: failed to read asset name bytes", idx);
       break;
     }
+
+    int found_error = 0;
+    for (u32 j = 0; j < bytes_read; j++) {
+      if (name_buf[j] < 0x20 || name_buf[j] > 0x7E) {
+        bun_add_violation(ctx, BUN_MALFORMED,
+          "asset[%u]: name contains non-printable byte 0x%02X at index %u",
+          idx, name_buf[j], total_checked + j);
+        
+        found_error = 1;
+        break;
+      }
+    }
+
+    if (found_error) break;
+
+    total_checked += (u32)bytes_read;
+    remaining -= (u32)bytes_read;
   }
 
-  free(name_buf);
   fseek(ctx->file, saved_pos, SEEK_SET);
 }
