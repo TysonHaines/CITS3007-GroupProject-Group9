@@ -42,6 +42,8 @@ typedef uint64_t u64;
 #define BUN_COMPRESS_RLE 1
 #define BUN_COMPRESS_ZLIB 2
 
+static bun_result_t file_status = BUN_OK;
+
 typedef struct {
     u32 magic;
     u16 version_major;
@@ -141,6 +143,13 @@ bun_result_t bun_close(BunParseContext *ctx);
 
 //______
 void bun_print_header(const BunHeader *header);
-
+void bun_validate_magic(const BunHeader *header);
+void bun_validate_offsets(const BunHeader *header);
+void bun_validate_version(const BunHeader *header);
+void bun_validate_asset_count(const BunHeader *header);
+void bun_validate_asset_table_size(const BunHeader *header, u64 file_size, u64 asset_table_size);
+void bun_validate_string_table_size(const BunHeader *header, u64 file_size);
+void bun_validate_data_section_size(const BunHeader *header, u64 file_size);
+void bun_validate_no_overlap(const BunHeader *header, u64 asset_table_size);
 //______
 #endif // BUN_H

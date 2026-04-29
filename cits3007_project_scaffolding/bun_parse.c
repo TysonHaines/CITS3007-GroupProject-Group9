@@ -77,7 +77,6 @@ bun_result_t bun_parse_header(BunParseContext *ctx, BunHeader *header) {
     return BUN_ERR_IO;
   }
 
-
   // populate `header` from `buf`.
   header->magic = read_u32_le(buf, 0);
   header->version_major = read_u16_le(buf, 4);
@@ -91,82 +90,32 @@ bun_result_t bun_parse_header(BunParseContext *ctx, BunHeader *header) {
   header->reserved = read_u64_le(buf, 52);
 
 
-  // validate fields and return BUN_MALFORMED or BUN_UNSUPPORTED
+  //Validate Header Fields
 
   // validate magic number is 'BUN0' (0x304E5542 (little-endian))
-  if (header->magic != BUN_MAGIC) {
-    fprintf(stderr, "\nMagic number is not 'BUN0' (0x304E5542 (little-endian))\n");
-    return BUN_MALFORMED;
-  }
+  bun_validate_magic(header);
+
   // validate offsets and sizes are divisible by 4
-  if (header->asset_table_offset % 4 != 0 ||
-    header->string_table_offset % 4 != 0 || 
-    header->string_table_size % 4 != 0 ||
-    header->data_section_offset % 4 != 0 ||
-    header->data_section_size % 4 != 0) {
-      fprintf(stderr, "\nOffsets and sizes must be divisible by 4\n");
-      return BUN_MALFORMED;
-  }
-  
+  bun_validate_offsets(header);
+
   // validate version is 1 or 0 otherwise unsupported
-  if (header->version_major != BUN_VERSION_MAJOR || header->version_minor != BUN_VERSION_MINOR) {
-    fprintf(stderr, "\nVersion is not 1 or 0\n");
-    return BUN_UNSUPPORTED;
-  }
+  bun_validate_version(header);
 
   // Guard against overflow when computing asset table size
-  if (header->asset_count > UINT64_MAX / 48) {
-    fprintf(stderr, "\nAsset count is too large\n");
-    return BUN_MALFORMED;
-  }
-  u64 asset_table_size = (u64)header->asset_count * 48;
+  bun_validate_asset_count(header);
 
   // Validate all sections lie entirely within the file
+  u64 asset_table_size = (u64)header->asset_count * 48;
   u64 file_size = (u64)ctx->file_size;
-
-  if (header->asset_table_offset > file_size ||
-      asset_table_size > file_size - header->asset_table_offset) {
-    fprintf(stderr, "\nAsset table is too large\n");
-    return BUN_MALFORMED;
-  }
-  if (header->string_table_offset > file_size ||
-      header->string_table_size > file_size - header->string_table_offset) {
-    fprintf(stderr, "\nString table is too large\n");
-    return BUN_MALFORMED;
-  }
-  if (header->data_section_offset > file_size ||
-      header->data_section_size > file_size - header->data_section_offset) {
-    fprintf(stderr, "\nData section is too large\n");
-    return BUN_MALFORMED;
-  }
+  
+  bun_validate_asset_table_size(header, file_size, asset_table_size);
+  bun_validate_string_table_size(header, file_size);
+  bun_validate_data_section_size(header, file_size);
 
   // Validate sections do not overlap each other
-  u64 asset_table_start = header->asset_table_offset;
-  u64 asset_table_end   = asset_table_start + asset_table_size;
+  bun_validate_no_overlap(header, asset_table_size);
 
-  u64 string_table_start = header->string_table_offset;
-  u64 string_table_end   = string_table_start + header->string_table_size;
-
-  u64 data_section_start = header->data_section_offset;
-  u64 data_section_end   = data_section_start + header->data_section_size;
-
-  // if asset table and string table overlap
-  if (asset_table_start < string_table_end && string_table_start < asset_table_end) {
-    fprintf(stderr, "\nAsset table and string table overlap\n");
-    return BUN_MALFORMED;
-  }
-  // if asset table and data section overlap
-  if (asset_table_start < data_section_end && data_section_start < asset_table_end) {
-    fprintf(stderr, "\nAsset table and data section overlap\n");
-    return BUN_MALFORMED;
-  }
-  // if string table and data section overlap
-  if (string_table_start < data_section_end && data_section_start < string_table_end) {
-    fprintf(stderr, "\nString table and data section overlap\n");
-    return BUN_MALFORMED;
-  }
-
-  return BUN_OK;
+  return file_status;
 }
 
 bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
@@ -236,6 +185,8 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
         fprintf(stderr, "\nRLE data must have even number of bytes\n");
         return BUN_MALFORMED;
       }
+      //_________________________________________________________________________________
+      //!!! The following code was retrieved from online sources !!!
       // guard against overflow when computing actual offset
       u64 actual_offset = header->data_section_offset + data_offset;
       if (actual_offset > (u64)ctx->file_size || data_size > (u64)ctx->file_size - actual_offset) {
@@ -264,6 +215,7 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
         fprintf(stderr, "\nfailed to restore file position\n");
         return BUN_ERR_IO;
       }
+      //_________________________________________________________________________________
     }
     
     //if compression is zlib
@@ -286,16 +238,18 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
       return BUN_UNSUPPORTED;
     }
 
-    // // validate flags are known
-    // if (flags != BUN_FLAG_ENCRYPTED && flags != BUN_FLAG_EXECUTABLE) {
-    //   fprintf(stderr, "\nflags unknown\n");
-    //   return BUN_UNSUPPORTED;
-    // }
-    //__________
+    // validate flags are known
+    if (flags != BUN_FLAG_ENCRYPTED && flags != BUN_FLAG_EXECUTABLE) {
+      fprintf(stderr, "\nflags unknown\n");
+      return BUN_UNSUPPORTED;
+    }
+    
     // find address of asset name in string table
     u64 pos = (u64)header->string_table_offset + (u64)name_offset;
+
     // allocate memory for name buffer
     u8 *name_buf = malloc(name_length);
+
     // if memory allocation fails, return error
     if (!name_buf) { 
       fprintf(stderr, "\nfailed to allocate memory for 'name_buf'\n");
@@ -303,17 +257,16 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
     }
     // seek to position of name in string table and read name into buffer
     fseek(ctx->file, (long)pos, SEEK_SET);
-    // failed to read name bytes
-    //_____
+    
     u32 read_len = name_length < 60 ? name_length : 60;
-    //_____
+    
     if (fread(name_buf, 1, read_len, ctx->file) != read_len) {
       free(name_buf);
       asset_name[read_len] = '\0';
       fprintf(stderr, "\nfailed to read name bytes\n");
       return BUN_ERR_IO; 
     }
-    //_____
+    
 
     // validate asset names consist of only printable ASCII characters (0x20-0x7E)
     for (size_t j = 0; j < name_length; j++) {
@@ -330,7 +283,6 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
       return BUN_ERR_IO;
     }
 
-    //__________
   }
   return BUN_OK;
 }
@@ -346,10 +298,10 @@ bun_result_t bun_close(BunParseContext *ctx) {
     return BUN_OK;
   }
 }
-
-//______
+//_________________________________________________________________________________
+//!!! AI (Claude 3.5 Sonnet) generated the following function, to print the header in a readable format !!!
 void bun_print_header(const BunHeader *header) {
-  printf("=== BUN Header ===\n");
+  printf("===== BUN Header =====\n");
   printf("  Magic:               0x%08X\n", header->magic);
   printf("  Version:             %u.%u\n", header->version_major, header->version_minor);
   printf("  Asset count:         %u\n", header->asset_count);
@@ -361,5 +313,95 @@ void bun_print_header(const BunHeader *header) {
   printf("  Reserved:            %llu\n", (unsigned long long)header->reserved);
   printf("\n");
 }
-//______
+//_________________________________________________________________________________
 
+
+// Validator Function Definitions
+
+void bun_validate_magic(const BunHeader *header) {
+  // validate magic number is 'BUN0' (0x304E5542 (little-endian))
+  if (header->magic != BUN_MAGIC) {
+    fprintf(stderr, "\nMagic number is not 'BUN0' (0x304E5542 (little-endian))\n");
+    file_status = BUN_MALFORMED;
+  }
+}
+
+void bun_validate_offsets(const BunHeader *header) {
+  // validate offsets and sizes are divisible by 4
+  if (header->asset_table_offset % 4 != 0 ||
+    header->string_table_offset % 4 != 0 || 
+    header->string_table_size % 4 != 0 ||
+    header->data_section_offset % 4 != 0 ||
+    header->data_section_size % 4 != 0) {
+      fprintf(stderr, "\nOffsets and sizes must be divisible by 4\n");
+      file_status = BUN_MALFORMED;
+  }
+}
+
+void bun_validate_version(const BunHeader *header) {
+  // validate version is 1 or 0 otherwise unsupported
+  if (header->version_major != BUN_VERSION_MAJOR || header->version_minor != BUN_VERSION_MINOR) {
+    fprintf(stderr, "\nVersion is not 1 or 0\n");
+    file_status = BUN_UNSUPPORTED;
+  }
+}
+
+void bun_validate_asset_count(const BunHeader *header) {
+  // Guard against overflow when computing asset table size
+  if (header->asset_count > UINT64_MAX / 48) {
+    fprintf(stderr, "\nAsset count is too large\n");
+    file_status = BUN_MALFORMED;
+  }
+}
+
+void bun_validate_asset_table_size(const BunHeader *header, u64 file_size, u64 asset_table_size) {
+  if (header->asset_table_offset > file_size ||
+      asset_table_size > file_size - header->asset_table_offset) {
+    fprintf(stderr, "\nAsset table is too large\n");
+    file_status = BUN_MALFORMED;
+  }
+}
+
+void bun_validate_string_table_size(const BunHeader *header, u64 file_size) {
+  if (header->string_table_offset > file_size ||
+    header->string_table_size > file_size - header->string_table_offset) {
+    fprintf(stderr, "\nString table is too large\n");
+    file_status = BUN_MALFORMED;
+  }
+}
+
+void bun_validate_data_section_size(const BunHeader *header, u64 file_size) {
+  if (header->data_section_offset > file_size ||
+      header->data_section_size > file_size - header->data_section_offset) {
+    fprintf(stderr, "\nData section is too large\n");
+    file_status = BUN_MALFORMED;
+  }
+}
+
+void bun_validate_no_overlap(const BunHeader *header, u64 asset_table_size) {
+  // Validate sections do not overlap each other
+  u64 asset_table_start = header->asset_table_offset;
+  u64 asset_table_end   = asset_table_start + asset_table_size;
+
+  u64 string_table_start = header->string_table_offset;
+  u64 string_table_end   = string_table_start + header->string_table_size;
+
+  u64 data_section_start = header->data_section_offset;
+  u64 data_section_end   = data_section_start + header->data_section_size;
+
+  // if asset table and string table overlap
+  if (asset_table_start < string_table_end && string_table_start < asset_table_end) {
+    fprintf(stderr, "\nAsset table and string table overlap\n");
+    file_status = BUN_MALFORMED;
+  }
+  // if asset table and data section overlap
+  if (asset_table_start < data_section_end && data_section_start < asset_table_end) {
+    fprintf(stderr, "\nAsset table and data section overlap\n");
+    file_status = BUN_MALFORMED;
+  }
+  // if string table and data section overlap
+  if (string_table_start < data_section_end && data_section_start < string_table_end) {
+    fprintf(stderr, "\nString table and data section overlap\n");
+    file_status = BUN_MALFORMED;
+  }
+}

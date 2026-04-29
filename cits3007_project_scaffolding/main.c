@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
   //     See project brief for output requirements.
 
  
-  //_____
+  //_____!!! AI (Claude 3.5 Sonnet) generated the following code for printing the final result summary !!!
   // print final result summary
   bun_print_header(&header);
   if (result == BUN_OK) {
