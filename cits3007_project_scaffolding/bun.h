@@ -9,12 +9,13 @@
 //
 
 typedef enum {
-    BUN_OK          = 0,
-    BUN_MALFORMED   = 1,
-    BUN_UNSUPPORTED = 2,
-    BUN_ERR_IO      = 3,   /* I/O error or file not found -- you may define
-                              additional codes in the range 3-10 as needed;
-                              document them in your report */
+    BUN_OK            = 0,
+    BUN_MALFORMED     = 1,
+    BUN_UNSUPPORTED   = 2,
+    BUN_ERR_IO        = 3,  // I/O error during read/seek/close
+    BUN_ERR_NOT_FOUND = 4,  // file does not exist or cannot be opened
+    BUN_ERR_USAGE     = 5,  // incorrect command-line arguments
+    BUN_ERR_NOMEM     = 6,  // memory allocation failed
 } bun_result_t;
 
 //
