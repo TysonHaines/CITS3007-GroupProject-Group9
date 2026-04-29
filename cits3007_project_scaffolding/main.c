@@ -4,19 +4,28 @@
 #include "bun.h"
 
 int main(int argc, char *argv[]) {
+  // Confirm correct number of command-line argumnents
   if (argc != 2) {
     fprintf(stderr, "Usage: %s <file.bun>\n", argv[0]);
-    return BUN_ERR_IO;
+    return BUN_ERR_USAGE;
   }
+
+  // Get file path from command-line arguments
   const char *path = argv[1];
 
+  // Initialize parse context and header struct
   BunParseContext ctx = {0};
   BunHeader header  = {0};
 
+  // Open the file and populate ctx; handle errors.
   bun_result_t result = bun_open(path, &ctx);
   if (result != BUN_OK) {
-    fprintf(stderr, "Error: could not open '%s'\n", path);
-    return result;
+      if (result == BUN_ERR_NOT_FOUND) {
+          fprintf(stderr, "Error: file '%s' not found\n", path);
+      } else {
+          fprintf(stderr, "Error: I/O error opening '%s'\n", path);
+      }
+      return result;
   }
 
   result = bun_parse_header(&ctx, &header);
