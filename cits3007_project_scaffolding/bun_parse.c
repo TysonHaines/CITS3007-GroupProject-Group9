@@ -224,6 +224,7 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
         return BUN_MALFORMED;
       }
     }
+
     //if compression is RLE, uncompressed size must not be 0
     else if (compression == BUN_COMPRESS_RLE) {
       if (uncompressed_size == 0) {
@@ -235,7 +236,36 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
         fprintf(stderr, "\nRLE data must have even number of bytes\n");
         return BUN_MALFORMED;
       }
+      // guard against overflow when computing actual offset
+      u64 actual_offset = header->data_section_offset + data_offset;
+      if (actual_offset > (u64)ctx->file_size || data_size > (u64)ctx->file_size - actual_offset) {
+        fprintf(stderr, "\ndata offset and size too large\n");
+        return BUN_MALFORMED;
+      }
+      long current_pos = ftell(ctx->file);
+        if (fseek(ctx->file, (long)actual_offset, SEEK_SET) != 0) {
+          fprintf(stderr, "\nfailed to jump to data offset\n");
+          return BUN_ERR_IO;
+      }
+      //  check rle count is non-zero
+      for(u64 j = 0; j < data_size; j += 2) {
+        u8 count_buf[2];
+        if(fread(count_buf,1,2,ctx->file) != 2) {
+          fprintf(stderr, "\nfailed to read RLE count\n");
+          return BUN_ERR_IO;
+        }
+        if (count_buf[0] == 0) {
+          fprintf(stderr, "\nRLE count must be non-zero\n");
+          return BUN_MALFORMED;
+        }
+      }
+      //restore file position
+      if (fseek(ctx->file, current_pos, SEEK_SET) != 0) {
+        fprintf(stderr, "\nfailed to restore file position\n");
+        return BUN_ERR_IO;
+      }
     }
+    
     //if compression is zlib
     else if (compression == BUN_COMPRESS_ZLIB) {
       if (uncompressed_size == 0) {
@@ -256,11 +286,11 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
       return BUN_UNSUPPORTED;
     }
 
-    // validate flags are known
-    if (flags != BUN_FLAG_ENCRYPTED && flags != BUN_FLAG_EXECUTABLE) {
-      fprintf(stderr, "\nflags unknown\n");
-      return BUN_UNSUPPORTED;
-    }
+    // // validate flags are known
+    // if (flags != BUN_FLAG_ENCRYPTED && flags != BUN_FLAG_EXECUTABLE) {
+    //   fprintf(stderr, "\nflags unknown\n");
+    //   return BUN_UNSUPPORTED;
+    // }
     //__________
     // find address of asset name in string table
     u64 pos = (u64)header->string_table_offset + (u64)name_offset;
