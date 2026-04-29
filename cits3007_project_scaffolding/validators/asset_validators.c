@@ -152,15 +152,19 @@ bun_result_t validate_flags(u32 flags) {
 bun_result_t validate_asset_name(const BunHeader *header, BunParseContext *ctx, u32 name_offset, u32 name_length, char *asset_name) {
   // find address of asset name in string table
     u64 pos = (u64)header->string_table_offset + (u64)name_offset;
+
     // allocate memory for name buffer
     u8 *name_buf = malloc(name_length);
+
     // if memory allocation fails, return error
     if (!name_buf) { 
       fprintf(stderr, "\nfailed to allocate memory for 'name_buf'\n");
-      return BUN_ERR_IO;
+      return BUN_ERR_NOMEM;
     }
+
     // seek to position of name in string table and read name into buffer
     fseek(ctx->file, (long)pos, SEEK_SET);
+
     // failed to read name bytes
     //_____
     u32 read_len = name_length < 60 ? name_length : 60;
