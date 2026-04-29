@@ -142,6 +142,5 @@ bun_result_t bun_close(BunParseContext *ctx);
 
 //______
 void bun_print_header(const BunHeader *header);
-
 //______
 #endif // BUN_H
