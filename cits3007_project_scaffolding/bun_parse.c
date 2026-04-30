@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include "bun.h"
 #include "validators/asset_validators.h"

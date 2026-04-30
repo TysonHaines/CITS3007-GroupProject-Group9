@@ -4,13 +4,12 @@
 
 #include "bun.h"
 bun_result_t bun_add_violation(BunParseContext *ctx, bun_result_t severity,
-// flawfinder: ignore
-                                const char *fmt, ...)__attribute__((format(printf, 3, 4))) {
+                                const char *fmt, ...) {
     // Two-pass formatting: first measure, then write into a sized buffer.
     va_list args;
     va_start(args, fmt);
     // flawfinder: ignore
-    int needed = vsnprintf(NULL, 0, fmt, args);
+    int needed = vsnprintf(NULL, 0, fmt, args); // NOLINT(clang-analyzer-valist.Uninitialized,clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling)
     va_end(args);
 
     if (needed < 0) {
@@ -24,7 +23,7 @@ bun_result_t bun_add_violation(BunParseContext *ctx, bun_result_t severity,
 
     va_start(args, fmt);
     // flawfinder: ignore
-    vsnprintf(msg, (size_t)needed + 1, fmt, args);
+    vsnprintf(msg, (size_t)needed + 1, fmt, args); // NOLINT(clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling)
     va_end(args);
 
     BunViolation *v = malloc(sizeof(BunViolation));
