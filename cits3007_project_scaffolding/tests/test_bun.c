@@ -8,12 +8,14 @@
 #include <errno.h>
 
 // Helper: terminate abnormally, after printing a message to stderr
-void die(const char *fmt, ...)
+//flawfinder: ignore
+void die(const char *fmt, ...) __attribute__((format(printf, 1, 2)))
 {
   va_list args;
   va_start(args, fmt);
 
   fprintf(stderr, "fatal error: ");
+  // flawfinder: ignore
   vfprintf(stderr, fmt, args);
   fprintf(stderr, "\n");
 
@@ -27,6 +29,7 @@ void die(const char *fmt, ...)
 static const char *fixture(const char *filename) {
     // For simplicity, tests assume they are run from the project root, and
     // test BUN files live in tests/fixtures/{valid,invalid}. Adjust if needed.
+    // flawfinder: ignore
     static char path[256];
     int res = snprintf(path, sizeof(path), "tests/fixtures/%s", filename);
     if (res < 0) {

@@ -1,5 +1,5 @@
 #pragma once
-#include "bun.h"
+#include "../bun.h"
 
 void validate_magic(BunParseContext *ctx, const BunHeader *header);
 void validate_offsets(BunParseContext *ctx, const BunHeader *header);

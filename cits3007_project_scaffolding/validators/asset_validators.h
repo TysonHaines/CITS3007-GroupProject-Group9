@@ -1,5 +1,5 @@
 #pragma once
-#include "bun.h"
+#include "../bun.h"
 
 void validate_name_length(BunParseContext *ctx, u32 idx, u32 name_length);
 

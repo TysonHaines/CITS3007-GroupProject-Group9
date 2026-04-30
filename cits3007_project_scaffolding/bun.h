@@ -114,7 +114,8 @@ bun_result_t bun_close(BunParseContext *ctx);
 //
 
 bun_result_t bun_add_violation(BunParseContext *ctx, bun_result_t severity,
-                                const char *fmt, ...);
+// flawfinder: ignore
+                                const char *fmt, ...)__attribute__((format(printf, 3, 4)));
 bun_result_t bun_worst_violation(const BunParseContext *ctx);
 void bun_print_violations(const BunParseContext *ctx);
 void bun_free_violations(BunParseContext *ctx);

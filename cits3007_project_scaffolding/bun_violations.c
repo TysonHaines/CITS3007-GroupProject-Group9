@@ -3,12 +3,13 @@
 #include <stdarg.h>
 
 #include "bun.h"
-
 bun_result_t bun_add_violation(BunParseContext *ctx, bun_result_t severity,
-                                const char *fmt, ...) {
+// flawfinder: ignore
+                                const char *fmt, ...)__attribute__((format(printf, 3, 4))) {
     // Two-pass formatting: first measure, then write into a sized buffer.
     va_list args;
     va_start(args, fmt);
+    // flawfinder: ignore
     int needed = vsnprintf(NULL, 0, fmt, args);
     va_end(args);
 
@@ -22,6 +23,7 @@ bun_result_t bun_add_violation(BunParseContext *ctx, bun_result_t severity,
     }
 
     va_start(args, fmt);
+    // flawfinder: ignore
     vsnprintf(msg, (size_t)needed + 1, fmt, args);
     va_end(args);
 

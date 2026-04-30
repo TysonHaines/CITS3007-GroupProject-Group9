@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include "bun.h"
 #include "validators/asset_validators.h"
@@ -43,9 +44,15 @@ bun_result_t bun_open(const char *path, BunParseContext *ctx) {
   // Open file, measure its size, rewind ready for parsing.
 
   // Open in binary mode; distinguish missing file from other I/O errors.
-  ctx->file = fopen(path, "rb");
+  // flawfinder: ignore
+int fd = open(path, O_RDONLY | O_NOFOLLOW);
+  if (fd == -1) {
+      return errno == ENOENT ? BUN_ERR_NOT_FOUND : BUN_ERR_IO;
+  }
+  ctx->file = fdopen(fd, "rb");
   if (!ctx->file) {
-    return errno == ENOENT ? BUN_ERR_NOT_FOUND : BUN_ERR_IO;
+      close(fd);
+      return BUN_ERR_IO;
   }
 
   // Seek to end to measure size.
