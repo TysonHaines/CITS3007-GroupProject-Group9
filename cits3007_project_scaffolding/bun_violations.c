@@ -6,24 +6,26 @@
 
 bun_result_t bun_add_violation(BunParseContext *ctx, bun_result_t severity,
                                 const char *fmt, ...) {
-    // Two-pass formatting: first measure, then write into a sized buffer.
-    va_list args;
+    va_list args, args_copy;
     va_start(args, fmt);
+    va_copy(args_copy, args);
+
     int needed = vsnprintf(NULL, 0, fmt, args);
     va_end(args);
 
     if (needed < 0) {
+        va_end(args_copy);
         return BUN_ERR_IO;
     }
 
     char *msg = malloc((size_t)needed + 1);
     if (!msg) {
+        va_end(args_copy);
         return BUN_ERR_NOMEM;
     }
 
-    va_start(args, fmt);
-    vsnprintf(msg, (size_t)needed + 1, fmt, args);
-    va_end(args);
+    vsnprintf(msg, (size_t)needed + 1, fmt, args_copy);
+    va_end(args_copy);
 
     BunViolation *v = malloc(sizeof(BunViolation));
     if (!v) {
@@ -34,7 +36,6 @@ bun_result_t bun_add_violation(BunParseContext *ctx, bun_result_t severity,
     v->message = msg;
     v->next = NULL;
 
-    // Append to tail to preserve insertion order.
     if (ctx->violations_tail) {
         ctx->violations_tail->next = v;
     } else {

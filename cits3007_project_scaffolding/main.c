@@ -60,6 +60,10 @@ int main(int argc, char *argv[]) {
   // BUN_MALFORMED and BUN_UNSUPPORTED don't need a summary line --
   // bun_print_violations already enumerated them.
 
-  bun_close(&ctx);
+  bun_result_t close_result = bun_close(&ctx);
+  if (result == BUN_OK && close_result != BUN_OK) {
+    fprintf(stderr, "Error: failed to close file (code %d)\n", close_result);
+    result = close_result;
+  }
   return result;
 }
