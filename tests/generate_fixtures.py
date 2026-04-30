@@ -381,7 +381,8 @@ def generate_invalid_files(output_dir):
     print("Generated invalid fixtures in", output_dir + '/invalid')
 
 if __name__ == "__main__":
-    output_dir = "fixtures"
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.join(script_dir, "fixtures")
     generate_valid_files(output_dir)
     generate_invalid_files(output_dir)
     print("All fixtures generated!")

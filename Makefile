@@ -8,7 +8,7 @@ LDFLAGS =
 # Sanitizer flags - uncomment during development and testing.
 # Do not leave them enabled in a "release" build as they affect performance.
 #
-CFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer -g
+# CFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer -g
 
 LIB     = bun_parse.c bun_print.c bun_violations.c validators/asset_validators.c validators/header_validators.c
 MAIN    = main.c
@@ -21,9 +21,15 @@ all: bun_parser
 bun_parser: $(MAIN) $(LIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
+# Auto-generate test fixtures if missing. The script writes to tests/fixtures/
+# regardless of the working directory. Per the brief, .bun files are not
+# included in the submission, so the marker generates them on demand.
+tests/fixtures: tests/generate_fixtures.py
+	python3 tests/generate_fixtures.py
+
 # The test binary links the same source files, but not main.c (which has its
 # own main()). libcheck provides the test runner's main() instead.
-test: tests/test_runner
+test: tests/test_runner tests/fixtures
 	./tests/test_runner
 
 tests/test_runner: $(TEST) $(LIB)
@@ -31,3 +37,4 @@ tests/test_runner: $(TEST) $(LIB)
 
 clean:
 	-rm bun_parser tests/test_runner *.o
+	-rm -rf tests/fixtures
