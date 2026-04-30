@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include "header_validators.h"
 
 void validate_magic(BunParseContext *ctx, const BunHeader *header) {
@@ -11,28 +12,28 @@ void validate_magic(BunParseContext *ctx, const BunHeader *header) {
 void validate_offsets(BunParseContext *ctx, const BunHeader *header) {
   if (header->asset_table_offset % 4 != 0) {
     bun_add_violation(ctx, BUN_MALFORMED,
-        "asset_table_offset (%llu) not divisible by 4",
-        (unsigned long long)header->asset_table_offset);
+        "asset_table_offset (%" PRIu64 ") not divisible by 4",
+        header->asset_table_offset);
   }
   if (header->string_table_offset % 4 != 0) {
     bun_add_violation(ctx, BUN_MALFORMED,
-        "string_table_offset (%llu) not divisible by 4",
-        (unsigned long long)header->string_table_offset);
+        "string_table_offset (%" PRIu64 ") not divisible by 4",
+        header->string_table_offset);
   }
   if (header->string_table_size % 4 != 0) {
     bun_add_violation(ctx, BUN_MALFORMED,
-        "string_table_size (%llu) not divisible by 4",
-        (unsigned long long)header->string_table_size);
+        "string_table_size (%" PRIu64 ") not divisible by 4",
+        header->string_table_size);
   }
   if (header->data_section_offset % 4 != 0) {
     bun_add_violation(ctx, BUN_MALFORMED,
-        "data_section_offset (%llu) not divisible by 4",
-        (unsigned long long)header->data_section_offset);
+        "data_section_offset (%" PRIu64 ") not divisible by 4",
+        header->data_section_offset);
   }
   if (header->data_section_size % 4 != 0) {
     bun_add_violation(ctx, BUN_MALFORMED,
-        "data_section_size (%llu) not divisible by 4",
-        (unsigned long long)header->data_section_size);
+        "data_section_size (%" PRIu64 ") not divisible by 4",
+        header->data_section_size);
   }
 }
 
@@ -51,10 +52,9 @@ void validate_asset_table_size(BunParseContext *ctx, const BunHeader *header,
   if (header->asset_table_offset > file_size ||
       asset_table_size > file_size - header->asset_table_offset) {
     bun_add_violation(ctx, BUN_MALFORMED,
-        "asset table extends past file end (offset=%llu, size=%llu, file_size=%llu)",
-        (unsigned long long)header->asset_table_offset,
-        (unsigned long long)asset_table_size,
-        (unsigned long long)file_size);
+        "asset table extends past file end (offset=%" PRIu64
+        ", size=%" PRIu64 ", file_size=%" PRIu64 ")",
+        header->asset_table_offset, asset_table_size, file_size);
   }
 }
 
@@ -63,10 +63,9 @@ void validate_string_table_size(BunParseContext *ctx, const BunHeader *header,
   if (header->string_table_offset > file_size ||
       header->string_table_size > file_size - header->string_table_offset) {
     bun_add_violation(ctx, BUN_MALFORMED,
-        "string table extends past file end (offset=%llu, size=%llu, file_size=%llu)",
-        (unsigned long long)header->string_table_offset,
-        (unsigned long long)header->string_table_size,
-        (unsigned long long)file_size);
+        "string table extends past file end (offset=%" PRIu64
+        ", size=%" PRIu64 ", file_size=%" PRIu64 ")",
+        header->string_table_offset, header->string_table_size, file_size);
   }
 }
 
@@ -75,10 +74,9 @@ void validate_data_section_size(BunParseContext *ctx, const BunHeader *header,
   if (header->data_section_offset > file_size ||
       header->data_section_size > file_size - header->data_section_offset) {
     bun_add_violation(ctx, BUN_MALFORMED,
-        "data section extends past file end (offset=%llu, size=%llu, file_size=%llu)",
-        (unsigned long long)header->data_section_offset,
-        (unsigned long long)header->data_section_size,
-        (unsigned long long)file_size);
+        "data section extends past file end (offset=%" PRIu64
+        ", size=%" PRIu64 ", file_size=%" PRIu64 ")",
+        header->data_section_offset, header->data_section_size, file_size);
   }
 }
 
@@ -94,15 +92,12 @@ void validate_no_overlap(BunParseContext *ctx, const BunHeader *header,
   u64 d_end   = d_start + header->data_section_size;
 
   if (a_start < s_end && s_start < a_end) {
-    bun_add_violation(ctx, BUN_MALFORMED,
-        "asset table and string table overlap");
+    bun_add_violation(ctx, BUN_MALFORMED, "asset table and string table overlap");
   }
   if (a_start < d_end && d_start < a_end) {
-    bun_add_violation(ctx, BUN_MALFORMED,
-        "asset table and data section overlap");
+    bun_add_violation(ctx, BUN_MALFORMED, "asset table and data section overlap");
   }
   if (s_start < d_end && d_start < s_end) {
-    bun_add_violation(ctx, BUN_MALFORMED,
-        "string table and data section overlap");
+    bun_add_violation(ctx, BUN_MALFORMED, "string table and data section overlap");
   }
 }

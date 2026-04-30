@@ -46,3 +46,7 @@ make test
 - Invalid file: as much of the file as can be safely shown is printed to stdout; one violation per line is printed to stderr.
 
 See the project report for full output format documentation, design decisions, and security analysis.
+
+## AI usage
+
+Anthropic Claude Opus 4.7 was used during development for idea generation, refactoring suggestions, comment polish, and a final style review. All output was reviewed and adapted by the group before inclusion. File-level attribution is recorded in source comments where AI scaffolding was substantial (e.g. `bun_print.c`).

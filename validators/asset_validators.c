@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #include "asset_validators.h"
 
 #define NAME_VALIDATION_BUF_SIZE 1024
-
 
 void validate_name_length(BunParseContext *ctx, u32 idx, u32 name_length) {
   if (name_length == 0) {
@@ -21,9 +21,8 @@ void name_fits_string_table(BunParseContext *ctx, u32 idx,
       (u64)name_length > string_table_size - (u64)name_offset) {
     bun_add_violation(ctx, BUN_MALFORMED,
         "asset[%u]: name out of string table bounds "
-        "(offset=%u, length=%u, table_size=%llu)",
-        idx, name_offset, name_length,
-        (unsigned long long)string_table_size);
+        "(offset=%u, length=%u, table_size=%" PRIu64 ")",
+        idx, name_offset, name_length, string_table_size);
   }
 }
 
@@ -35,11 +34,8 @@ void data_fits_data_section(BunParseContext *ctx, u32 idx,
       data_size > header->data_section_size - data_offset) {
     bun_add_violation(ctx, BUN_MALFORMED,
         "asset[%u]: data out of data section bounds "
-        "(offset=%llu, size=%llu, section_size=%llu)",
-        idx,
-        (unsigned long long)data_offset,
-        (unsigned long long)data_size,
-        (unsigned long long)header->data_section_size);
+        "(offset=%" PRIu64 ", size=%" PRIu64 ", section_size=%" PRIu64 ")",
+        idx, data_offset, data_size, header->data_section_size);
   }
 }
 
@@ -51,7 +47,7 @@ void validate_compression(BunParseContext *ctx, u32 idx,
     if (uncompressed_size != 0) {
       bun_add_violation(ctx, BUN_MALFORMED,
           "asset[%u]: uncompressed_size must be 0 when compression=none "
-          "(got %llu)", idx, (unsigned long long)uncompressed_size);
+          "(got %" PRIu64 ")", idx, uncompressed_size);
     }
     return;
   }
@@ -64,8 +60,8 @@ void validate_compression(BunParseContext *ctx, u32 idx,
     }
     if (data_size % 2 != 0) {
       bun_add_violation(ctx, BUN_MALFORMED,
-          "asset[%u]: RLE data size must be even (got %llu)",
-          idx, (unsigned long long)data_size);
+          "asset[%u]: RLE data size must be even (got %" PRIu64 ")",
+          idx, data_size);
       return;  // can't safely walk odd-byte RLE data
     }
 
@@ -81,7 +77,7 @@ void validate_compression(BunParseContext *ctx, u32 idx,
     // Walk every (count, byte) pair and check count != 0.
     long current_pos = ftell(ctx->file);
     if (fseek(ctx->file, (long)actual_offset, SEEK_SET) != 0) {
-      return;  // I/O failure; let caller detect via other means
+      return;
     }
     for (u64 j = 0; j < data_size; j += 2) {
       u8 pair[2];
@@ -90,8 +86,8 @@ void validate_compression(BunParseContext *ctx, u32 idx,
       }
       if (pair[0] == 0) {
         bun_add_violation(ctx, BUN_MALFORMED,
-            "asset[%u]: RLE pair at offset %llu has zero count",
-            idx, (unsigned long long)j);
+            "asset[%u]: RLE pair at offset %" PRIu64 " has zero count",
+            idx, j);
         break;  // one violation per asset is enough
       }
     }
@@ -131,8 +127,7 @@ void validate_flags(BunParseContext *ctx, u32 idx, u32 flags) {
 void validate_asset_name(BunParseContext *ctx, u32 idx,
                           const BunHeader *header,
                           u32 name_offset, u32 name_length) {
-  // Skip if other validators already flagged length issues.
-  if (name_length == 0) return;
+  if (name_length == 0) return;  // already flagged by validate_name_length
 
   long saved_pos = ftell(ctx->file);
   if (saved_pos < 0) return;
@@ -140,12 +135,14 @@ void validate_asset_name(BunParseContext *ctx, u32 idx,
   u64 pos = (u64)header->string_table_offset + (u64)name_offset;
   if (fseek(ctx->file, (long)pos, SEEK_SET) != 0) return;
 
+  // Read in chunks so memory use is bounded regardless of name_length.
   u8 name_buf[NAME_VALIDATION_BUF_SIZE];
   u32 remaining = name_length;
   u32 total_checked = 0;
 
   while (remaining > 0) {
-    u32 to_read = (remaining < NAME_VALIDATION_BUF_SIZE) ? remaining : NAME_VALIDATION_BUF_SIZE;
+    u32 to_read = (remaining < NAME_VALIDATION_BUF_SIZE)
+                    ? remaining : NAME_VALIDATION_BUF_SIZE;
     size_t bytes_read = fread(name_buf, 1, to_read, ctx->file);
 
     if (bytes_read != to_read) {
@@ -158,9 +155,8 @@ void validate_asset_name(BunParseContext *ctx, u32 idx,
     for (u32 j = 0; j < bytes_read; j++) {
       if (name_buf[j] < 0x20 || name_buf[j] > 0x7E) {
         bun_add_violation(ctx, BUN_MALFORMED,
-          "asset[%u]: name contains non-printable byte 0x%02X at index %u",
-          idx, name_buf[j], total_checked + j);
-        
+            "asset[%u]: name contains non-printable byte 0x%02X at index %u",
+            idx, name_buf[j], total_checked + j);
         found_error = 1;
         break;
       }

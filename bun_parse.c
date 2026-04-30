@@ -40,22 +40,19 @@ static u64 read_u64_le(const u8 *buf, size_t offset) {
 //
 
 bun_result_t bun_open(const char *path, BunParseContext *ctx) {
-  // Open file, measure its size, rewind ready for parsing.
-
-  // Open in binary mode; distinguish missing file from other I/O errors.
+  // Distinguish missing file from other I/O errors.
   ctx->file = fopen(path, "rb");
   if (!ctx->file) {
     return errno == ENOENT ? BUN_ERR_NOT_FOUND : BUN_ERR_IO;
   }
 
-  // Seek to end to measure size.
   if (fseek(ctx->file, 0, SEEK_END) != 0) {
     fclose(ctx->file);
     ctx->file = NULL;
     return BUN_ERR_IO;
   }
 
-  // ftell after SEEK_END gives file size; negative means error.
+  // ftell after SEEK_END gives file size; negative indicates an error.
   ctx->file_size = ftell(ctx->file);
   if (ctx->file_size < 0) {
     fclose(ctx->file);
@@ -63,9 +60,7 @@ bun_result_t bun_open(const char *path, BunParseContext *ctx) {
     return BUN_ERR_IO;
   }
 
-  // Rewind for header parse.
   rewind(ctx->file);
-
   return BUN_OK;
 }
 
@@ -83,7 +78,6 @@ bun_result_t bun_parse_header(BunParseContext *ctx, BunHeader *header) {
     return BUN_ERR_IO;
   }
 
-  // Populate header from buffer.
   header->magic               = read_u32_le(buf, 0);
   header->version_major       = read_u16_le(buf, 4);
   header->version_minor       = read_u16_le(buf, 6);
@@ -95,7 +89,7 @@ bun_result_t bun_parse_header(BunParseContext *ctx, BunHeader *header) {
   header->data_section_size   = read_u64_le(buf, 44);
   header->reserved            = read_u64_le(buf, 52);
 
-  // Run all header validators -- they accumulate violations in ctx.
+  // Validators accumulate violations in ctx; the worst severity is returned.
   validate_magic(ctx, header);
   validate_offsets(ctx, header);
   validate_version(ctx, header);
@@ -131,7 +125,6 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
     u32 checksum          = read_u32_le(buf, 40);
     u32 flags             = read_u32_le(buf, 44);
 
-    // Run all asset validators -- they accumulate violations in ctx.
     validate_name_length(ctx, i, name_length);
     name_fits_string_table(ctx, i, name_offset, header->string_table_size, name_length);
     data_fits_data_section(ctx, i, data_offset, data_size, header);
@@ -145,15 +138,10 @@ bun_result_t bun_parse_assets(BunParseContext *ctx, const BunHeader *header) {
 }
 
 bun_result_t bun_close(BunParseContext *ctx) {
-  // Caller must hold an open file
-  assert(ctx->file);
+  assert(ctx->file);  // caller must hold an open file
 
-  // Free the violation list before closing the file.
   bun_free_violations(ctx);
-
-  // Close the stream and clear the file pointer.
   int res = fclose(ctx->file);
   ctx->file = NULL;
-
   return res ? BUN_ERR_IO : BUN_OK;
 }
