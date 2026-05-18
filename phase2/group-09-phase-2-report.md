@@ -198,6 +198,33 @@ Alternatively, run `make reproduce_f2` in the reproduction package to execute th
 automatically.
 
 
+
+### Finding F-03
+- ID: F-03
+- Category: Hang
+- Spec reference: Phase 1 Project Brief section 5.3 -- Parser must not hang
+- Assumptions: File is valid RLE with matching uncompressed_size
+
+**Description**
+The parser's RLE validation loop in `bun_parse.c` iterates through the entire data_size, processing each RLE pair. For large files (50MB+), the parser takes over 60 seconds to complete - exceeding the 5-second timeout threshold and producing no output during that time.
+
+**Expected behaviour**
+The parser should complete validation within 5 seconds for any valid input.
+
+**Actual behaviour**
+For a 50MB RLE file (f3-rle-timeout.bun), the parser takes 60+ seconds to complete.
+
+**Reproduction steps**
+
+1. Build: `make CFLAGS="-std=c11 -fsanitize=address -fno-omit-frame-pointer -g -O2"`
+2. Run: `timeout 10 ./bun_parser reproduction/bun_files/f3-rle-timeout.bun`
+3. Observe: Process is killed by timeout - no completion, no output
+
+Expected outcome: Parser completes within 5 seconds
+
+Actual outcome: Parser takes 60+ seconds to complete, exceeding the 5-second threshold
+
+
 ## Conclusion
 
 [Summarise your findings. If flaws were found, briefly characterise their nature -- are
