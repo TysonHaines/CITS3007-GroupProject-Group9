@@ -1,0 +1,5 @@
+# Local build artefacts and scratch copies (not part of phase1/phase2 layout)
+cits3007_project_scaffolding/
+**/rle-stress.bun
+main.exe
+*.exe
