@@ -197,6 +197,36 @@ Actual outcome: asset 1 is printed eventhough uncompressed size and value uncomp
 Alternatively, run `make reproduce_f2` in the reproduction package to execute this test
 automatically.
 
+### Finding F-03
+- ID: F-03
+- Category: Hang
+- Spec reference: Phase 2 Project Brief section 5.3 What counts as a finding -- Category Hang: The parser produces no output to stdout/stderr and no process
+termination for more than 5 seconds.
+- Assumptions:
+
+
+**Description**
+
+When the asset parsing loop detects an integer overflow between `data_offset` and `data_size` on line 407, the code logs the error and jumps to the next iteration of the `for` loop. However, the parser does not terminate the program or advance the file cursor to the next asset record. As a result, the parser continually reads the same malformed asset record from stream `asset count` times, and if `asset count` is large, without producing output stdout/stderr or process termination for more than 5 seconds.
+
+**Expected behaviour**
+
+The parser must exit with status code `1` (BUN_MALFORMED) and output a list of spec violations to stderr immediately after detecting the violation.
+
+**Actual behaviour**
+
+Triggering an integer overflow causes the parser to repeatedly read the same asset `asset count` times. If this count is large, the program appears to hang because it neither aborts nor logs to stderr while looping. It only reports the violation and exits after it finishes processing the asset all asset count times.
+
+**Reproduction steps**
+
+1. Build the target parser with the following flags: `default flags`
+2. Run: `./bun_parser 20-data-offset-overflow`
+
+
+Expected outcome: asset output is not displayed to standard output and parser immediately exits with status code 1 (`BUN_MALFORMED`) after detecting integer overflow violation.
+
+Actual outcome: parser hangs whilst reading malformed asset then prints asset records to standard output and exits with status code 1 (`BUN_MALFORMED`).
+
 
 ## Conclusion
 
