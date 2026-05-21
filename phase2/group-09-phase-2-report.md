@@ -526,14 +526,14 @@ Alternatively, run `make reproduce_f06` in the reproduction package to execute t
 
 ## Conclusion
 
-Six confirmed flaws were identified, fitting into two significant catecgories:
-- **Resource-use violations (F-01, F-04):** The parser leaks `str_buf` on mid-loop early-return paths in `bun_parse_assets` (F-01), and allocates two arrays linear in `asset_count` then touches every byte by writing each parsed record into them (F-04). Both have their cause in the same function and both stem from the same overall design choice which was to buffer the full asset table in RAM rather than implement sublinear memory usage as the breif suggests.
+Six confirmed flaws were identified, fitting into two significant categories:
+- **Resource-use violations (F-01, F-04):** The parser leaks `str_buf` on mid-loop early-return paths in `bun_parse_assets` (F-01), and allocates two arrays linear in `asset_count` then touches every byte by writing each parsed record into them (F-04). Both have their cause in the same function and both stem from the same overall design choice which was to buffer the full asset table in RAM rather than implement sublinear memory usage as the brief suggests.
 - **Validation logic that handles non-empty inputs correctly but mishandles boundary cases (F-02, F-05, F-06).** `calloc(asset_count, ...)` rejects `asset_count = 0` on spec-conformant libcs (F-02). The RLE uncompressed-size check records `BUN_MALFORMED` but does not abort (F-05). The section-overlap formula incorrectly flags zero-size sections positioned inside non-empty sections (F-06). These are independent bugs but share the pattern of a check that is correct for the "normal" case but incorrect at zero or edge cases. 
-- **A diagnostic-truncation bug (F-03)**. This is the last flaw. It doesn't fit into the other categories and It is not a security flaw, but does violate the Phase 2 brief's requirement that error messages contain enough detail to locate and fix the problem. The truncated message drops the list of supported compression types, which is the only actionable guidance in the message.
+- **A diagnostic-truncation bug (F-03)**. This is the last flaw. It doesn't fit into the other categories and it is not a security flaw, but does violate the Phase 2 brief's requirement that error messages contain enough detail to locate and fix the problem. The truncated message drops the list of supported compression types, which is the only actionable guidance in the message.
 
   **Recommendations to group 17:** 
 - Adopt `-Wformat-truncation=2` in `CFLAGS` to surface F-03 and similar issues at compile time.
-- Refactor `bun_parse_assets` to iterate-and-seek without retaining the full asset table in RAM which addresses F-04 and removes the leak in F-01)
-- Guard `calloc(n, *)` with `if (n == 0) return …;` which will address F02
-- Add `return BUN_MALFORMED;` after the RLE uncompressed-size mismatch detection to handle F-05
-- Update the overlap checks to ignore size zero sections, like in `if (size > 0 && offset < BUN_HEADER_SIZE)` and similarly in the other formula to handle F-06.
+- Refactor `bun_parse_assets` to iterate-and-seek without retaining the full asset table in RAM (addresses F-04 and removes the leak surface in F-01).
+- Guard `calloc(n, *)` with `if (n == 0) return …;` which will address F-02.
+- Add `return BUN_MALFORMED;` after the RLE uncompressed-size mismatch detection to handle F-05.
+- Update the overlap checks to skip empty sections (addresses F-06).
