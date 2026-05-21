@@ -53,7 +53,7 @@ def construct_f1():
 
     header = construct_header(large_asset_count, asset_table_offset, asset_table_offset, 0, asset_table_offset, 0)
 
-    fname = 'f1-large-asset-count.bun'
+    fname = 'tests/f1-large-asset-count.bun'
     with open(fname, 'wb') as f:
         f.write(header)
         f.seek(file_size - 1)  # jump to the last byte
@@ -115,13 +115,13 @@ def construct_f2():
     out = header + asset_zero + asset_one + string_table + data_section
     assert len(out) == 172
 
-    fname = 'f2-rle-no-abort.bun'
+    fname = 'tests/f2-rle-no-abort.bun'
     with open(fname, 'wb') as f:
         f.write(out)
     
     #____ AI: claude sonnet 4.6 was used to wrote the following nicely formatted print summary____
     print(f"\n[Finding - No.2] Created {fname} ({len(out)} bytes)")
-    print(f"       Asset 0: RLE, claims uncompressed_size=10, actual=5 (mismatch)")
+    print(f"       Asset 0: RLE, claims uncompressed_size=8, actual=2 (mismatch)")
     print(f"       Asset 1: valid uncompressed 'okay'='ABCD' (should not appear)")
     #____
 

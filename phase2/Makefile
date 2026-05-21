@@ -38,11 +38,11 @@ reproduce_f1: build
 	@echo "=== F-01: Excessive memory use ==="
 	/usr/bin/time -v $(PARSER) tests/f1-large-asset-count.bun 2>&1 | \
 		grep -E "Maximum resident|Exit status"
-	@echo "PASS if Maximum resident set size exceeds 1,000,000 kB (1 GB)"
+	@echo "PASS if Maximum resident set size exceeds 1 GB"
 
 # ── F-02: Parser continues after RLE uncompressed_size mismatch ─────────────
 reproduce_f2: build
 	@echo "=== F-02: Incorrect output - parser does not abort ==="
 	$(PARSER) tests/f2-rle-no-abort.bun; \
 	echo "Exit code: $$?"
-	@echo "PASS if Asset 1 (name: good, payload: ABCD) appears in output above"
+	@echo "PASS if Asset 1 (name: okay, payload: ABCD) appears in output above"
