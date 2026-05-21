@@ -1,10 +1,33 @@
-/* fseeko fault-injection shim.
+/*
+ * ============================================================================
+ * AI ASSISTANCE DECLARATION
+ * ============================================================================
+ * This file was developed with the assistance of Claude.
+ * Specifically, AI was used to:
+ * 1. LD_PRELOAD shim structure (Lab 7 – week 9, Dynamic shared libraries):
+ *    Claude generated the shared library boilerplate using
+ *    dlsym(RTLD_NEXT, ...) to intercept fseeko and forward all other calls
+ *    to the real implementation, as covered in the lab's section on
+ *    overriding libc functions via LD_PRELOAD.
+ * 2. Constructor attribute: Claude suggested __attribute__((constructor))
+ *    for one-time initialisation of the real function pointer and FAULT_NTH
+ *    environment variable parsing.
+ * ============================================================================
  *
- * Set FAULT_NTH=K to make the K-th fseeko call fail with EIO.
- * All other fseeko calls pass through to the real implementation.
+ * fault_shim.c — fseeko fault-injection LD_PRELOAD shim.
  *
- * Purpose: drive bun_parse_assets() down an early-return path that
- * I claim leaks str_buf, then let LeakSanitizer prove it.
+ * Build:
+ *   gcc -shared -fPIC fault_shim.c -o fault_shim.so -ldl
+ *
+ * Usage:
+ *   Set FAULT_NTH=K before running the target binary to make the K-th
+ *   fseeko call return -1 with errno=EIO.  All other calls pass through
+ *   to the real implementation.
+ *
+ * Purpose:
+ *   Drives bun_parse_assets() down an early-return path mid-loop so that
+ *   LeakSanitizer can confirm the str_buf heap allocation is not freed
+ *   on that path (Finding F-01).
  */
 #define _GNU_SOURCE
 #include <stdio.h>
