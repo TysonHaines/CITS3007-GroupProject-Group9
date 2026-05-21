@@ -142,7 +142,6 @@ automatically.
 - ID: F-01
 - Category: Excessive memory use
 - Spec reference: Phase 1 Project Brief section 5.3 -- sub-linear memory requirement
-- Assumptions: 
 
 **Description**
 The current parser behaviour for allocating memory to struct `BunParseContext` properties `assets_printable` and `assets` is achieved via `calloc`. Using `calloc` here does not obey the project brief's sublinear memory requirement, as it has visit every single byte requested and allocate memory to all the bytes requested. Hence, the time complexity and memory complexity increases linearly with complexity O(n). To achieve sublinear memory, the program must control the amount of memory being allocated from the RAM at slower rate when input data grows. Currently, this codebase when for example given a file of asset_count equal to 30,000,000 which is approximately 1.45gb, will allocate 1.45gb of the RAM for this operation which exceeds the briefs requirement of a 1GB threshold (as stated in Project Brief Phase 2 section 5.3). 
@@ -162,7 +161,7 @@ The parser allocates memory to the entire set of asset records upfront. This mea
 
 Expected outcome: sublinear memory implementation, resulting in well under 1GB of RAM being allocated for the file to be executed under the parser.
 
-Actual outcome: Maximum resident set size approximately 1.37 GB
+Actual outcome: Maximum resident set size is above 1GB, which exceeds the excessive memory use requirement defined in the project brief for phase 1.
 
 Alternatively, run `make reproduce_f1` in the reproduction package to execute this test
 automatically.
@@ -173,7 +172,6 @@ automatically.
 - ID: F-02
 - Category: Incorrect output
 - Spec reference: Phase 1 BUN specification section 5.1 Notes -- 4. If a parser detects that compression is used, and that the actual uncompressed size is different to the value of uncompressed_size, it must abort parsing and return BUN_MALFORMED.
-- Assumptions:
 
 **Description**
 When the parser detects that the actual uncompressed size is different to the value of `uncompressed_size`, the parser record that the error has occured but continues handling the rest of the assets. As stated in the brief, the parser is suppose to abort parsing and return `BUN_MALFORMED`. 
@@ -188,7 +186,7 @@ When the parser detects that for a given asset the actual uncompressed size and 
 
 1. Build the target parser with the following flags: `default flags`
 2. Run: `./bun_parser f2-no-abort-rle.bun`
-3. Observe that Asset 1 (name: "good", payload: "ABCD") is printed despite the error in Asset 0
+3. Observe that Asset 1 (name: "okay", payload: "ABCD") is printed despite the error in Asset 0
 
 Expected outcome: no asset output printed, program exits with `BUN_MALFORMED`
 
