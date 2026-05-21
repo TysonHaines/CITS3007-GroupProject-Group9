@@ -77,7 +77,6 @@ def build_single_asset(name, data, compression=BUN_COMPRESS_NONE, uncompressed_s
     asset_table_offset = _align4(HEADER_SIZE)
     string_table_offset = _align4(asset_table_offset + RECORD_SIZE)
     string_table_size = _align4(len(name))
-    string_table_start = string_table_offset
     
     name_offset = name_offset_override if name_offset_override is not None else 0
     data_offset = data_offset_override if data_offset_override is not None else 0
@@ -147,7 +146,6 @@ def build_two_assets(name1, data1, name2, data2):
     )
     
     # Padding to asset table
-    pos = f.tell()
     f.write(b'\x00' * (asset_table_offset - HEADER_SIZE))
     
     # Asset records
@@ -214,7 +212,7 @@ def generate_invalid_files(output_dir):
     
     # 01-bad-magic.bun
     with open(output_dir + '/invalid/01-bad-magic.bun', 'wb') as f:
-        f.write(build_single_asset(b"test", b"data", name_offset_override=0))  # will patch magic
+        f.write(build_single_asset(b"test", b"data", name_offset_override=0))
     
     # Patch the magic in file 01
     with open(output_dir + '/invalid/01-bad-magic.bun', 'r+b') as f:
@@ -248,7 +246,7 @@ def generate_invalid_files(output_dir):
         version_major=1,
         version_minor=0,
         asset_count=1,
-        asset_table_offset=61,  # Not divisible by 4!
+        asset_table_offset=61,
         string_table_offset=_align4(61 + RECORD_SIZE),
         string_table_size=4,
         data_section_offset=_align4(61 + RECORD_SIZE + 4),
@@ -261,11 +259,11 @@ def generate_invalid_files(output_dir):
     with open(output_dir + '/invalid/03-offsets-not-div4.bun', 'wb') as out:
         out.write(f.getvalue())
     
-    # 04-truncated-header.bun - file ends during header read
+    # 04-truncated-header.bun
     with open(output_dir + '/invalid/04-truncated-header.bun', 'wb') as f:
-        f.write(b'\x00' * 30)  # Only 30 bytes instead of 60
+        f.write(b'\x00' * 30)
     
-    # 05-section-out-of-bounds.bun - string_table_size too large
+    # 04-section-out-of-bounds.bun
     with open(output_dir + '/invalid/04-section-out-of-bounds.bun', 'wb') as f:
         f.write(build_single_asset(b"test", b"data", name_offset_override=9999))
     
@@ -278,7 +276,7 @@ def generate_invalid_files(output_dir):
         version_minor=0,
         asset_count=1,
         asset_table_offset=asset_table_offset,
-        string_table_offset=asset_table_offset + 20,  # Overlaps!
+        string_table_offset=asset_table_offset + 20,
         string_table_size=20,
         data_section_offset=asset_table_offset + 20 + 20,
         data_section_size=20,
@@ -289,11 +287,11 @@ def generate_invalid_files(output_dir):
     with open(output_dir + '/invalid/05-sections-overlap.bun', 'wb') as out:
         out.write(f.getvalue())
     
-    # 06-name-oob.bun - name_offset beyond string table
+    # 06-name-oob.bun
     with open(output_dir + '/invalid/06-name-oob.bun', 'wb') as f:
         f.write(build_single_asset(b"test", b"data", name_offset_override=9999))
     
-    # 07-data-oob.bun - data_offset beyond data section
+    # 07-data-oob.bun
     with open(output_dir + '/invalid/07-data-oob.bun', 'wb') as f:
         f.write(build_single_asset(b"test", b"data", data_offset_override=9999))
     
@@ -322,23 +320,23 @@ def generate_invalid_files(output_dir):
     with open(output_dir + '/invalid/09-zero-name.bun', 'wb') as out:
         out.write(f.getvalue())
     
-    # 10-rle-compression.bun - RLE
+    # 10-rle-compression.bun
     with open(output_dir + '/invalid/10-rle-compression.bun', 'wb') as f:
         f.write(build_single_asset(b"test", b"\x03\x07", compression=BUN_COMPRESS_RLE, uncompressed_size=3))
     
-    # 11-zlib-compression.bun - zlib
+    # 11-zlib-compression.bun
     with open(output_dir + '/invalid/11-zlib-compression.bun', 'wb') as f:
         f.write(build_single_asset(b"test", b"\x78\x9c", compression=BUN_COMPRESS_ZLIB, uncompressed_size=10))
     
-    # 12-unknown-compression.bun - unknown
+    # 12-unknown-compression.bun
     with open(output_dir + '/invalid/12-unknown-compression.bun', 'wb') as f:
         f.write(build_single_asset(b"test", b"data", compression=99))
     
-    # 13-rle-odd-size.bun - odd RLE data
+    # 13-rle-odd-size.bun
     with open(output_dir + '/invalid/13-rle-odd-size.bun', 'wb') as f:
         f.write(build_single_asset(b"test", b"\x03\x07\x01", compression=BUN_COMPRESS_RLE, uncompressed_size=3))
     
-    # 14-rle-zero-count.bun - zero RLE count
+    # 14-rle-zero-count.bun
     with open(output_dir + '/invalid/14-rle-zero-count.bun', 'wb') as f:
         f.write(build_single_asset(b"test", b"\x00\x07", compression=BUN_COMPRESS_RLE, uncompressed_size=1))
     
@@ -346,11 +344,11 @@ def generate_invalid_files(output_dir):
     with open(output_dir + '/invalid/15-empty-file.bun', 'wb') as f:
         pass
     
-    # 16-bad-version-major.bun - version_major != 1
+    # 16-bad-version-major.bun
     f = io.BytesIO()
     write_header(f,
         magic=BUN_MAGIC,
-        version_major=99,  # Not 1!
+        version_major=99,
         version_minor=0,
         asset_count=1,
         asset_table_offset=_align4(HEADER_SIZE),
@@ -366,18 +364,57 @@ def generate_invalid_files(output_dir):
     with open(output_dir + '/invalid/16-bad-version-major.bun', 'wb') as out:
         out.write(f.getvalue())
     
-    # 17-truncated-header.bun - only partial header
+    # 17-truncated-header.bun
     with open(output_dir + '/invalid/17-truncated-header.bun', 'wb') as f:
-        f.write(b'\x00' * 30)  # Too short for header
+        f.write(b'\x00' * 30)
     
-    # 18-checksum-nonzero.bun - checksum != 0
+    # 18-checksum-nonzero.bun
     with open(output_dir + '/invalid/18-checksum-nonzero.bun', 'wb') as f:
         f.write(build_single_asset(b"test", b"data", checksum=0xDEADBEEF))
     
-    # 19-flags-unknown.bun - bit 7 set, outside the known ENCRYPTED|EXECUTABLE bits
+    # 19-flags-unknown.bun
     with open(output_dir + '/invalid/19-flags-unknown.bun', 'wb') as f:
         f.write(build_single_asset(b"test", b"data", flags=0x80))
     
+    # 20-data-offset-overflow.bun
+    f = io.BytesIO()
+    asset_count = 9999999
+    asset_table_offset = _align4(HEADER_SIZE)
+    string_table_offset = _align4(asset_table_offset + asset_count * RECORD_SIZE)
+    string_table_size = 16
+    data_section_offset = _align4(string_table_offset + string_table_size)
+    data_section_size = 4
+
+    write_header(f,
+        magic=BUN_MAGIC,
+        version_major=1,
+        version_minor=0,
+        asset_count=asset_count,
+        asset_table_offset=asset_table_offset,
+        string_table_offset=string_table_offset,
+        string_table_size=string_table_size,
+        data_section_offset=data_section_offset,
+        data_section_size=data_section_size,
+    )
+    f.write(b'\x00' * (asset_table_offset - HEADER_SIZE))
+    
+    # The initial record triggers the overflow check condition
+    write_asset_record(f, 
+        name_offset=0, 
+        name_length=14, 
+        data_offset=0xFFFFFFFFFFFFFFF0, 
+        data_size=0x20
+    )
+    # Backfill the remaining structure blocks to keep the file format size legal
+    for _ in range(asset_count - 1):
+        write_asset_record(f, name_offset=0, name_length=14, data_offset=0, data_size=4)
+        
+    f.write(b"overflow_asset\x00\x00")
+    f.write(b"data")
+    
+    with open(output_dir + '/invalid/20-data-offset-overflow.bun', 'wb') as out:
+        out.write(f.getvalue())
+
     print("Generated invalid fixtures in", output_dir + '/invalid')
 
 if __name__ == "__main__":

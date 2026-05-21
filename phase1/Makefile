@@ -14,7 +14,7 @@ LIB     = bun_parse.c bun_print.c bun_violations.c validators/asset_validators.c
 MAIN    = main.c
 TEST    = tests/test_bun.c
 
-.PHONY: all test clean
+.PHONY: all test clean reproduce_f3
 
 all: bun_parser
 
@@ -31,6 +31,12 @@ tests/fixtures: tests/generate_fixtures.py
 # own main()). libcheck provides the test runner's main() instead.
 test: tests/test_runner tests/fixtures
 	./tests/test_runner
+
+reproduce_f3:
+	$(MAKE) clean
+	$(MAKE) all
+	$(MAKE) tests/fixtures
+	./bun_parser ./tests/fixtures/invalid/20-data-offset-overflow.bun
 
 tests/test_runner: $(TEST) $(LIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $$(pkg-config --cflags --libs check)

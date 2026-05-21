@@ -227,6 +227,8 @@ Expected outcome: asset output is not displayed to standard output and parser im
 
 Actual outcome: parser hangs whilst reading malformed asset then prints asset records to standard output and exits with status code 1 (`BUN_MALFORMED`).
 
+Alternatively, run `make reproduce_f3` in the reproduction package to execute this test
+automatically.
 
 ## Conclusion
 
