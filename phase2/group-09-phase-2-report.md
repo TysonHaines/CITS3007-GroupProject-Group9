@@ -76,6 +76,25 @@ header-includes: |
 
 ---
 
+<style>
+@page {
+  size: A4;
+  margin: 2.5cm 2cm 2.5cm 2cm;
+  @bottom-center {
+    content: counter(page);
+    font-size: 10pt;
+    font-family: serif;
+  }
+}
+/* @media print {
+  body {
+    border: 1px solid #999;
+    padding: 5pt;
+  }
+} */
+</style>
+
+
 **Group 09 members:**
 - Tyson Haines, 23779585, \@TysonHaines,
 - Cameron Kelly, 23862126, \@CameronKel,
@@ -90,6 +109,7 @@ Our group chose group 17's codebase due to some key concerns caught early in the
 Our testing approach was structured around the categories listed in the Phase 2 brief: crashes, excessive memory usage, hangs, and incorrect outputs. We also focussed on the six areas of the BUN specification that the brief identifies as boundary-sensitive: zero-length sections, maximum field values, overlapping sections, RLE and uncompressed_size mismatches, asset-name bounds, and large `asset_count`. Six findings were ultimately confirmed and are reproduced automatically by the accompanying package via `make reproduce`. The findings cluster into two main types: linear or unbounded resource allocation, and mishandled validation logic.
 
 ---
+
 ## Assumptions and method
 
 ### General assumptions
@@ -109,8 +129,6 @@ For testing, our focus was to read the main files in the codebase: `bun_parse.c`
 When testing using codebase using the provided .bun invalid and valid test files we observed no failures and the printed summary output as expected. However, it was noticed that when testing files 15-rle-bomb.bun and 16-rle-truncated.bun, the codebase was catching on offset size requirements and moving to the next asset too quickly before having the chance to detect the invalid rle logic. This behaviour was not expected eventhough it is not completely incorrect. As a result, our group started to closely compare essential requirements stated in the project brief and bun specification that group 17 may have overlooked when writing their logic for the codebase.
 
   
-
-**[Suggested addition to make the tool inventory explicit, which the rubric rewards under "Reproduction package quality" — robust to small environmental differences — and under "Findings report quality" — coverage systematic:]**
 
   
 
