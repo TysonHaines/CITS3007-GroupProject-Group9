@@ -107,6 +107,91 @@ def gen_probe_trunc(out_dir):
     write(os.path.join(out_dir, "probe_trunc.bun"), bytes(data))
 
 
+def gen_probe_large_assets(out_dir):
+    """Sparse BUN file with asset_count = 25,000,000.
+
+    The parser calls calloc(asset_count, sizeof(BunAssetRecord)) at line 302
+    and writes to ctx->assets[i] for every i at line 337. With 25M records
+    that's a 1.2 GB allocation that is actually touched, pushing RSS over
+    the 1 GB threshold defined in the Phase 2 brief §5.3.
+
+    Used by F-04. File is sparse — only ~4 KB on disk.
+    """
+    ASSET_COUNT = 25_000_000
+    ATO = 60
+    STO = ATO + ASSET_COUNT * 48
+    file_size = STO
+
+    hdr = header(ASSET_COUNT, ATO, STO, 0, STO, 0)
+    path = os.path.join(out_dir, "probe_large_assets.bun")
+    fd = os.open(path, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o644)
+    os.write(fd, hdr)
+    os.ftruncate(fd, file_size)   # sparse — virtual size = file_size
+    os.close(fd)
+    print(f"  wrote {path}  ({file_size:,} bytes virtual, sparse)")
+
+
+def gen_probe_rle_mismatch(out_dir):
+    """Two assets: asset 0 is RLE with claimed uncompressed_size that doesn't
+    match the actual RLE expansion; asset 1 is a valid uncompressed asset.
+
+    Spec §5.1 note 4: parser must abort parsing and return BUN_MALFORMED on
+    the mismatch. The parser detects the mismatch and sets BUN_MALFORMED,
+    but does NOT abort — it continues to process and print asset 1.
+
+    Used by F-05.
+    """
+    # String table: "bad" at offset 0 len 3, "good" at offset 4 len 4
+    string_table = b"bad\x00good\x00\x00\x00\x00"   # 12 bytes (div by 4)
+
+    # Data section:
+    #   Asset 0 RLE data: (count=3, value='A') -> expands to 3 bytes
+    #   Asset 1 raw data: "ABCD"
+    data_section = bytes([0x03, 0x41]) + b"\x00\x00" + b"ABCD"   # 8 bytes
+
+    ATO = 60
+    STO = ATO + 2 * 48   # 156
+    STS = len(string_table)
+    DSO = STO + STS
+    DSS = len(data_section)
+
+    hdr = header(2, ATO, STO, STS, DSO, DSS)
+
+    # Asset 0: RLE compressed, claims uncompressed_size=10 but actually expands to 3
+    rec0 = record(name_off=0, name_len=3, data_off=0, data_size=2,
+                  uncompressed_size=10, compression=1)
+    # Asset 1: uncompressed, valid
+    rec1 = record(name_off=4, name_len=4, data_off=4, data_size=4,
+                  uncompressed_size=0, compression=0)
+
+    write(os.path.join(out_dir, "probe_rle_mismatch.bun"),
+          hdr + rec0 + rec1 + string_table + data_section)
+
+
+def gen_probe_empty_overlap(out_dir):
+    """An empty asset table (asset_count=0, size 0) placed strictly inside
+    the string table.
+
+    Per spec §9.3, "no sections overlap." An empty section occupies zero
+    bytes and cannot overlap anything. The parser's overlap check at
+    bun_parse.c:278 uses the formula A.start < B.end && A.end > B.start —
+    which incorrectly flags zero-size A inside B as overlapping.
+
+    Used by F-06.
+    """
+    # String table at [60, 76), empty asset table placed at offset 64 (inside)
+    STO = 60
+    STS = 16
+    ATO = 64               # 4-byte aligned, strictly inside string table
+    DSO = STO + STS        # 76
+
+    string_table = b"hello\x00\x00\x00world\x00\x00\x00"   # 16 bytes
+    hdr = header(0, ATO, STO, STS, DSO, 0)
+
+    write(os.path.join(out_dir, "probe_empty_overlap.bun"),
+          hdr + string_table)
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print(f"Usage: {sys.argv[0]} <output_dir>", file=sys.stderr)
@@ -119,4 +204,7 @@ if __name__ == "__main__":
     gen_probe_two_assets(out_dir)
     gen_probe_empty(out_dir)
     gen_probe_trunc(out_dir)
+    gen_probe_large_assets(out_dir)
+    gen_probe_rle_mismatch(out_dir)
+    gen_probe_empty_overlap(out_dir)
     print("Done.")

@@ -10,7 +10,7 @@
 
 .NOTPARALLEL:
 .PHONY: reproduce build_san build_plain build_shims gen_fixtures \
-        test_f01 test_f02 test_f03 clean
+        test_f01 test_f02 test_f03 test_f04 test_f05 test_f06 clean
 
 # ---------------------------------------------------------------------------
 # Build flags
@@ -44,6 +44,9 @@ reproduce: build_san build_plain build_shims gen_fixtures
 	@$(MAKE) test_f01
 	@$(MAKE) test_f02
 	@$(MAKE) test_f03
+	@$(MAKE) test_f04
+	@$(MAKE) test_f05
+	@$(MAKE) test_f06
 	@echo ""
 	@echo "############################################################"
 	@echo "#  All tests complete"
@@ -198,6 +201,109 @@ test_f03:
 	 fi
 
 # ---------------------------------------------------------------------------
+# F-04: Excessive memory use — linear allocation in bun_parse_assets
+#
+# Lines 301-302: calloc(asset_count, sizeof(int))      -> 4  bytes per record
+#                calloc(asset_count, sizeof(BunAssetRecord)) -> 48 bytes / rec
+# Line 337:      ctx->assets[i] = record (writes every record into the array)
+#
+# For asset_count = 25M, the calloc reserves ~1.2 GB; the loop then touches
+# every page, pushing RSS over the 1 GB threshold defined by Phase 2 §5.3.
+# The fixture is a sparse file so on-disk footprint is ~4 KB.
+# ---------------------------------------------------------------------------
+test_f04:
+	@echo ""
+	@echo "========================================="
+	@echo "F-04: Excessive memory use (linear allocation in asset loop)"
+	@echo "========================================="
+	@echo ""
+	@echo "--- Measuring peak RSS while parsing 25M-asset sparse file ---"
+	@if command -v /usr/bin/time >/dev/null 2>&1; then \
+	   RSS_LINE=$$(/usr/bin/time -v ./bun_parser_plain \
+	     $(FIXTURES_DIR)/probe_large_assets.bun 2>&1 >/dev/null \
+	     | grep "Maximum resident set size"); \
+	 else \
+	   echo "  (/usr/bin/time not available, using Python fallback)"; \
+	   RSS_LINE=$$(python3 scripts/measure_rss.py ./bun_parser_plain \
+	     $(FIXTURES_DIR)/probe_large_assets.bun | grep "Maximum resident"); \
+	 fi; \
+	 echo "  $$RSS_LINE"; \
+	 RSS_KB=$$(echo "$$RSS_LINE" | awk '{print $$NF}'); \
+	 RSS_MB=$$((RSS_KB / 1024)); \
+	 echo "  -> Peak RSS: $$RSS_MB MB"; \
+	 if [ $$RSS_KB -gt 1048576 ]; then \
+	   echo "[FLAW TRIGGERED] F-04: Peak RSS $$RSS_MB MB exceeds 1 GB threshold"; \
+	 else \
+	   echo "[NOT TRIGGERED]  F-04: Peak RSS $$RSS_MB MB within 1 GB threshold"; \
+	 fi
+
+# ---------------------------------------------------------------------------
+# F-05: Parser does not abort on RLE uncompressed_size mismatch
+#
+# Spec §5.1 note 4: "If a parser detects that compression is used, and that
+# the actual uncompressed size is different to the value of uncompressed_size,
+# it must abort parsing and return BUN_MALFORMED."
+#
+# The parser at bun_parse.c:458-463 records the BUN_MALFORMED error but does
+# NOT return — execution continues to the next iteration of the asset loop,
+# so subsequent assets are still processed and printed.
+#
+# Probe: asset 0 is RLE with uncompressed_size=10 (actual expansion=3);
+#        asset 1 is a valid uncompressed asset with payload "ABCD".
+# Flaw triggered if asset 1's name "good" appears in the parser's stdout.
+# ---------------------------------------------------------------------------
+test_f05:
+	@echo ""
+	@echo "========================================="
+	@echo "F-05: Parser does not abort on RLE uncompressed_size mismatch"
+	@echo "========================================="
+	@echo ""
+	@STDOUT=$$(./bun_parser_plain $(FIXTURES_DIR)/probe_rle_mismatch.bun 2>/dev/null); \
+	 STDERR=$$(./bun_parser_plain $(FIXTURES_DIR)/probe_rle_mismatch.bun 2>&1 >/dev/null); \
+	 echo "  Errors (stderr):"; \
+	 echo "$$STDERR" | grep -E "Error|uncompressed" | sed 's/^/    /'; \
+	 echo ""; \
+	 echo "  Assets printed (stdout, after mismatch detected):"; \
+	 echo "$$STDOUT" | grep -E "Asset Name|Payload" | sed 's/^/    /'; \
+	 echo ""; \
+	 if echo "$$STDOUT" | grep -q "Asset Name: good"; then \
+	   echo "[FLAW TRIGGERED] F-05: Asset 1 processed and printed despite spec-mandated abort"; \
+	 else \
+	   echo "[NOT TRIGGERED]  F-05: Parser aborted correctly on mismatch"; \
+	 fi
+
+# ---------------------------------------------------------------------------
+# F-06: False-positive overlap detection on empty sections
+#
+# Spec §9.3: "no sections overlap". An empty section (size = 0) occupies no
+# bytes and cannot overlap anything. The parser's overlap formula at
+# bun_parse.c:278 (and the header-overlap check at line 227) does not
+# account for empty sections and reports them as overlapping when their
+# offset lies inside another section.
+#
+# Probe: asset_count = 0 (so asset_table_size = 0) placed at offset 64,
+# strictly inside the string table at [60, 76). The parser should accept;
+# it reports "Asset table overlaps with string table" and exits 1.
+# ---------------------------------------------------------------------------
+test_f06:
+	@echo ""
+	@echo "========================================="
+	@echo "F-06: False-positive overlap on empty section"
+	@echo "========================================="
+	@echo ""
+	@STDERR=$$(./bun_parser_plain $(FIXTURES_DIR)/probe_empty_overlap.bun 2>&1 >/dev/null); \
+	 ./bun_parser_plain $(FIXTURES_DIR)/probe_empty_overlap.bun > /dev/null 2>&1; \
+	 RC=$$?; \
+	 echo "  Errors (stderr):"; \
+	 echo "$$STDERR" | grep -E "Error|overlap" | sed 's/^/    /'; \
+	 echo ""; \
+	 if [ $$RC -ne 0 ] && echo "$$STDERR" | grep -q "overlap"; then \
+	   echo "[FLAW TRIGGERED] F-06: Spec-conformant file rejected with false overlap error (rc=$$RC)"; \
+	 else \
+	   echo "[NOT TRIGGERED]  F-06: File accepted correctly (rc=$$RC)"; \
+	 fi
+
+# ---------------------------------------------------------------------------
 # Housekeeping
 # ---------------------------------------------------------------------------
 clean:
@@ -205,5 +311,8 @@ clean:
 	-rm -f fault_shim.so zero_calloc_shim.so
 	-rm -f $(FIXTURES_DIR)/probe_two_assets.bun \
 	       $(FIXTURES_DIR)/probe_empty.bun \
-	       $(FIXTURES_DIR)/probe_trunc.bun
+	       $(FIXTURES_DIR)/probe_trunc.bun \
+	       $(FIXTURES_DIR)/probe_large_assets.bun \
+	       $(FIXTURES_DIR)/probe_rle_mismatch.bun \
+	       $(FIXTURES_DIR)/probe_empty_overlap.bun
 	-cd target && $(MAKE) clean 2>/dev/null || true
