@@ -46,10 +46,10 @@ header-includes: |
 
 **Group 09 members:**
 
-- Tyson Haines, 23779585, \@username,
-- Cameron Kelly, 23862126, \@username,
-- Xavier Kuang, 24466935, \@username,
-- Yashwardhan Laharia, 24295462, \@username,
+- Tyson Haines, 23779585, \@TysonHaines,
+- Cameron Kelly, 23862126, \@CameronKel,
+- Xavier Kuang, 24466935, \@Xavierk1123,
+- Yashwardhan Laharia, 24295462, \@YashwardhanLaharia,
 
 
 ## Introduction
