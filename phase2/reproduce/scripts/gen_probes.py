@@ -1,14 +1,33 @@
 #!/usr/bin/env python3
+# =============================================================================
+# AI ASSISTANCE DECLARATION
+# This file was developed with the assistance of Claude.
+# Specifically, AI was used to:
+# 1. Binary format construction (Lab 6 – week 8, Binary data formats):
+#    Claude assisted with the struct.pack format strings and little-endian
+#    field layout matching the BUN spec on-disk structure, as covered in
+#    the lab's section on serialisation and endianness.
+# 2. Sparse file creation: Claude suggested using os.ftruncate to produce a
+#    virtually large file without consuming disk space (probe_large_assets.bun).
+# =============================================================================
 """Generate crafted BUN fixtures for the reproduction package.
 
 Usage: python3 scripts/gen_probes.py <output_dir>
 
 Produces:
-  probe_two_assets.bun  -- two valid uncompressed assets (for F-01)
-  probe_empty.bun       -- valid zero-asset file           (for F-02)
-  probe_trunc.bun       -- 10,001 assets, last has unsupported
-                           compression value that overflows the 128-byte
-                           snprintf buffer                  (for F-03)
+  probe_two_assets.bun   -- two valid uncompressed assets (for F-01)
+  probe_empty.bun        -- valid zero-asset file          (for F-02)
+  probe_trunc.bun        -- 10,001 assets, last has unsupported
+                            compression value that overflows the 128-byte
+                            snprintf buffer                 (for F-03)
+  probe_large_assets.bun -- sparse file with 25M assets; triggers >1 GB
+                            RSS via linear calloc           (for F-04)
+  probe_rle_mismatch.bun -- RLE asset whose uncompressed_size mismatches
+                            actual expansion; followed by a valid asset
+                            to confirm parser does not abort (for F-05)
+  probe_empty_overlap.bun-- zero-size asset table placed inside the string
+                            table; exposes false-positive overlap check
+                                                            (for F-06)
 
 No dependencies beyond the Python standard library.
 """

@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# =============================================================================
+# AI ASSISTANCE DECLARATION
+# This file was developed with the assistance of Claude.
+# Specifically, AI was used to:
+# 1. /proc polling approach: Claude suggested reading VmHWM from
+#    /proc/PID/status as a portable peak-RSS fallback on Linux.
+# 2. Threading pattern: Claude generated the daemon thread and nonlocal
+#    peak_kb polling loop structure.
+# =============================================================================
 """Run a command and report its peak RSS by polling /proc/PID/status.
 
 Used as a fallback when /usr/bin/time -v isn't available on the SDE.
